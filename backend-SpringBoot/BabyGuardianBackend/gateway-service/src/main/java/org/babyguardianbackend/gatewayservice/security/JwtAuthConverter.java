@@ -1,6 +1,5 @@
 package org.babyguardianbackend.gatewayservice.security;
 
-
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -20,7 +19,8 @@ import java.util.stream.Stream;
 @Component
 public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
-    private final JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+    private final JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter =
+            new JwtGrantedAuthoritiesConverter();
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
@@ -34,19 +34,15 @@ public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationTo
 
     private Collection<GrantedAuthority> extractRealmRoles(Jwt jwt) {
         Map<String, Object> realmAccess = jwt.getClaim("realm_access");
-
-        if (realmAccess == null || realmAccess.isEmpty()) {
-            return Set.of();
-        }
+        if (realmAccess == null || realmAccess.isEmpty()) return Set.of();
 
         Object rolesObj = realmAccess.get("roles");
-        if (!(rolesObj instanceof List<?> roles)) {
-            return Set.of();
-        }
+        if (!(rolesObj instanceof List<?> roles)) return Set.of();
 
         return roles.stream()
-                .filter(role -> role instanceof String)
-                .map(role -> new SimpleGrantedAuthority((String) role)) // Prefixe standard
+                .filter(r -> r instanceof String)
+                // ✅ important: Spring attend "ROLE_xxx" pour hasRole("xxx")
+                .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
                 .collect(Collectors.toSet());
     }
 }

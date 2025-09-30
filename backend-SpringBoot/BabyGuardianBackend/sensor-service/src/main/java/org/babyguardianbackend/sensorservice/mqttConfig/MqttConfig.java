@@ -10,6 +10,9 @@ import org.springframework.integration.mqtt.core.DefaultMqttPahoClientFactory;
 import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
 import org.springframework.integration.mqtt.inbound.MqttPahoMessageDrivenChannelAdapter;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.integration.annotation.ServiceActivator;
+import org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler;
+import org.springframework.messaging.MessageHandler;
 
 import java.util.Arrays;
 
@@ -68,5 +71,18 @@ public class MqttConfig {
         adapter.setCompletionTimeout(5000);   // attente SUBACK
         adapter.setOutputChannel(mqttInputChannel());
         return adapter;
+    }
+
+    @Bean
+    public MessageChannel mqttOutboundChannel() {
+        return new DirectChannel();
+    }
+
+    @Bean
+    @ServiceActivator(inputChannel = "mqttOutboundChannel")
+    public MessageHandler mqttOutbound(MqttPahoClientFactory factory) {
+        MqttPahoMessageHandler handler = new MqttPahoMessageHandler("spring-publisher", factory);
+        handler.setAsync(true);
+        return handler;
     }
 }
