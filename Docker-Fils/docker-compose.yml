@@ -1,7 +1,9 @@
-version: '3.8'
+version: "3.9"
+
 services:
   auth_db:
     image: postgres:17.5-alpine3.21
+    container_name: auth_db
     restart: always
     environment:
       POSTGRES_USER: authentification-service
@@ -14,6 +16,7 @@ services:
 
   sensor_db:
     image: postgres:17.5-alpine3.21
+    container_name: sensor_db
     restart: always
     environment:
       POSTGRES_USER: sensor-service
@@ -27,14 +30,13 @@ services:
   vault:
     image: hashicorp/vault:latest
     container_name: dev-vault
-    cap_add:
-      - IPC_LOCK
+    cap_add: ["IPC_LOCK"]
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: root
       VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    command: server -dev
     ports:
       - "8200:8200"
-    command: server -dev
     restart: always
 
   keycloak:
@@ -44,20 +46,22 @@ services:
     environment:
       KC_DB: postgres
       KC_DB_URL_HOST: auth_db
-      KC_DB_URL_PORT: 5432
+      KC_DB_URL_PORT: "5432"
       KC_DB_URL_DATABASE: authentification-db
       KC_DB_USERNAME: authentification-service
       KC_DB_PASSWORD: 1234
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+
+      # --- IMPORTANT : Cloudflare Tunnel en HTTPS ---
+      KC_PROXY: edge
+      KC_HOSTNAME: plants-locator-skin-assumed.trycloudflare.com   
+      KC_HOSTNAME_STRICT: "false"
     ports:
       - "8080:8080"
     depends_on:
       - auth_db
     restart: always
-
-
-  # === Nouveau service MQTT ===
   mqtt:
     image: eclipse-mosquitto:2
     container_name: dev-mqtt
@@ -70,8 +74,12 @@ services:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     healthcheck:
-      # Attend jusqu'à 15s un message $SYS
-      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -p 1883 -t '$SYS/broker/uptime' -C 1 -W 15 || exit 1"]
+      # IMPORTANT : échapper $ -> $$ pour éviter l'expansion par Compose
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -h 127.0.0.1 -p 1883 -t '$$SYS/broker/uptime' -C 1 -W 15 || exit 1",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -85,4 +93,4 @@ volumes:
     driver: local
   mosquitto_log:
     driver: local
-
+#docker run --rm -it cloudflare/cloudflared:latest tunnel --url http://host.docker.internal:8080

@@ -18,14 +18,5 @@ public class Test {
     public Mono<String> test() {
         return Mono.just("test");
     }
-    @GetMapping("/roles")
-    public List<String> getRoles(Authentication authentication) {
-        if (authentication instanceof JwtAuthenticationToken jwtAuth) {
-            return jwtAuth.getAuthorities().stream()
-                    .map(GrantedAuthority::getAuthority)
-                    .collect(Collectors.toList());
-        } else {
-            return List.of("Unknown or not JWT-authenticated");
-        }
-    }
+
 }

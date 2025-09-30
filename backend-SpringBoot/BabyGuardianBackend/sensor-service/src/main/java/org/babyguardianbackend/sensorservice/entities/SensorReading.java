@@ -2,7 +2,10 @@ package org.babyguardianbackend.sensorservice.entities;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.CreationTimestamp;
+
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity @Table(name = "sensor_readings")
@@ -24,12 +27,7 @@ public class SensorReading {
     private Double  temp;          // °C (une seule valeur consolidée)
     private Boolean finger;        // <--- présence du doigt
 
+    @CreationTimestamp
     @Column(nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @PrePersist
-    public void prePersist() {
-        if (deviceId == null || deviceId.isBlank()) deviceId = DEFAULT_DEVICE_ID;
-        if (createdAt == null) createdAt = Instant.now();
-    }
+    private LocalDateTime createdAt;
 }

@@ -11,4 +11,5 @@ public interface SensorReadingRepository extends JpaRepository<SensorReading, UU
 
     List<SensorReading> findTop50ByDeviceIdOrderByCreatedAtDesc(String deviceId);
     SensorReading findTop1ByDeviceIdOrderByCreatedAtDesc(String deviceId);
+
 }
