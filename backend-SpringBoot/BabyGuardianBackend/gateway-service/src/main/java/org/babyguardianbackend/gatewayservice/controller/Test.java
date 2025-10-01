@@ -13,10 +13,15 @@ import java.util.stream.Collectors;
 
 @RestController
 public class Test {
-    @GetMapping("/test")
+    @GetMapping("/test1")
     @PreAuthorize("hasAuthority('ADMIN')")
     public Mono<String> test() {
         return Mono.just("test");
     }
 
+
+    @GetMapping("/test")
+    public String test2(){
+        return "test";
+    }
 }

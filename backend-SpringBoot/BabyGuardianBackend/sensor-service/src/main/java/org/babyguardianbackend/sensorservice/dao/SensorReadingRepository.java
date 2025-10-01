@@ -1,15 +1,15 @@
 package org.babyguardianbackend.sensorservice.dao;
 
-
 import org.babyguardianbackend.sensorservice.entities.SensorReading;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
+@Repository
 public interface SensorReadingRepository extends JpaRepository<SensorReading, UUID> {
 
-    List<SensorReading> findTop50ByDeviceIdOrderByCreatedAtDesc(String deviceId);
-    SensorReading findTop1ByDeviceIdOrderByCreatedAtDesc(String deviceId);
-
+    // lookup par device.deviceId (string : esp32-<MAC>)
+    Optional<SensorReading> findFirstByDevice_DeviceIdOrderByCreatedAtDesc(String deviceId);
 }

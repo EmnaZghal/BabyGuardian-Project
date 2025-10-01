@@ -20,7 +20,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: sensor-service
-      POSTGRES_PASSWORD: 12345
+      POSTGRES_PASSWORD: 12345f 
       POSTGRES_DB: sensor-db
     ports:
       - "5445:5432"
@@ -53,10 +53,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
 
-      # --- IMPORTANT : Cloudflare Tunnel en HTTPS ---
-      KC_PROXY: edge
-      KC_HOSTNAME: plants-locator-skin-assumed.trycloudflare.com   
-      KC_HOSTNAME_STRICT: "false"
+
     ports:
       - "8080:8080"
     depends_on:
@@ -88,6 +85,8 @@ volumes:
   auth_data:
     driver: local
   sensor_data:
+    driver: local
+  alert_data:
     driver: local
   mosquitto_data:
     driver: local
