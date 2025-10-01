@@ -11,22 +11,22 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Predicate;
 
 @Slf4j
 @Component
 public class DeviceConnectionMonitor {
 
-    // Timeout configurable (en secondes)
     @Value("${monitoring.device-timeout-seconds:30}")
     private long deviceTimeoutSeconds;
 
-    // Suivi lastSeen + état
     private final Map<String, DeviceStatus> devices = new ConcurrentHashMap<>();
 
-    // Abonnés SSE (frontend)
-    private final CopyOnWriteArrayList<SseEmitter> alertEmitters = new CopyOnWriteArrayList<>();
+    /** Chaque abonné SSE peut être filtré par un predicate sur deviceId */
+    private final CopyOnWriteArrayList<Subscriber> subscribers = new CopyOnWriteArrayList<>();
 
     private static class DeviceStatus {
         final String deviceId;
@@ -40,6 +40,22 @@ public class DeviceConnectionMonitor {
         }
     }
 
+    private static class Subscriber {
+        final SseEmitter emitter;
+        final Predicate<String> acceptsDeviceId; // null => tout accepter
+
+        Subscriber(SseEmitter emitter, Predicate<String> acceptsDeviceId) {
+            this.emitter = emitter;
+            this.acceptsDeviceId = acceptsDeviceId;
+        }
+
+        boolean accepts(String deviceId) {
+            return acceptsDeviceId == null || acceptsDeviceId.test(deviceId);
+        }
+    }
+
+    /* ================== API Monitoring ================== */
+
     /** Appelé quand on reçoit des vitals/online : rafraîchit lastSeen et (re)connecte si besoin */
     public void recordDeviceActivity(String deviceId) {
         DeviceStatus prev = devices.get(deviceId);
@@ -52,10 +68,14 @@ public class DeviceConnectionMonitor {
         if (wasDisconnected) {
             log.info("✅ Device {} RECONNECTÉ", deviceId);
             sendConnectionAlert(deviceId, true);
+        } else {
+            // ping fonctionnel (optionnel)
+            emit(deviceId, "ping", String.format(
+                    "{\"type\":\"PING\",\"deviceId\":\"%s\",\"ts\":%d}", deviceId, System.currentTimeMillis()));
         }
     }
 
-    /** Forçage d’état (utile quand on reçoit LWT “offline”) */
+    /** Forçage d’état (LWT offline) */
     public void markDisconnected(String deviceId) {
         DeviceStatus st = devices.computeIfAbsent(deviceId, DeviceStatus::new);
         st.connected = false;
@@ -67,7 +87,56 @@ public class DeviceConnectionMonitor {
         recordDeviceActivity(deviceId);
     }
 
-    /** Vérif périodique par timeout (si plus de vitals depuis X sec) */
+    /** Statuts exposés */
+    public Map<String, Boolean> getAllStatuses() {
+        Map<String, Boolean> out = new ConcurrentHashMap<>();
+        devices.forEach((id, st) -> out.put(id, st.connected));
+        return out;
+    }
+
+    public boolean isConnected(String deviceId) {
+        DeviceStatus st = devices.get(deviceId);
+        return st != null && st.connected;
+    }
+
+    /* ================== SSE : abonnements ================== */
+
+    /** Abonnement sans filtre (legacy) */
+    public void addAlertEmitter(SseEmitter emitter) {
+        addAlertEmitter(emitter, (Predicate<String>) null);
+    }
+
+    /** Abonnement filtré par Predicate deviceId -> boolean */
+    public void addAlertEmitter(SseEmitter emitter, Predicate<String> acceptsDeviceId) {
+        Subscriber sub = new Subscriber(emitter, acceptsDeviceId);
+        subscribers.add(sub);
+
+        emitter.onCompletion(() -> subscribers.remove(sub));
+        emitter.onTimeout(() -> subscribers.remove(sub));
+        emitter.onError(e -> subscribers.remove(sub));
+
+        log.info("➕ Client SSE alertes : {} abonnés", subscribers.size());
+
+        // État initial pour les devices autorisés par le filtre
+        devices.forEach((deviceId, st) -> {
+            if (sub.accepts(deviceId)) {
+                String init = String.format(
+                        "{\"type\":\"INITIAL_STATUS\",\"deviceId\":\"%s\",\"connected\":%b}",
+                        deviceId, st.connected
+                );
+                safeSend(sub.emitter, "initial-status", init);
+            }
+        });
+    }
+
+    /** Surcharge pour une liste blanche explicite de devices */
+    public void addAlertEmitterWhitelisted(SseEmitter emitter, Set<String> allowedDeviceIds) {
+        Predicate<String> p = (allowedDeviceIds == null ? null : allowedDeviceIds::contains);
+        addAlertEmitter(emitter, p);
+    }
+
+    /* ================== Tâches planifiées ================== */
+
     @Scheduled(fixedRate = 5000)
     public void checkTimeouts() {
         LocalDateTime now = LocalDateTime.now();
@@ -81,59 +150,38 @@ public class DeviceConnectionMonitor {
         });
     }
 
-    /** (Optionnel) keep-alive SSE pour éviter la coupure proxy */
     @Scheduled(fixedRate = 20000)
     public void pingSseClients() {
-        broadcast("ping", "{\"type\":\"PING\"}");
+        broadcast("ping", "{\"type\":\"PING_SSE\"}");
     }
 
-    /** Gestion des SSE clients */
-    public void addAlertEmitter(SseEmitter emitter) {
-        alertEmitters.add(emitter);
-
-        emitter.onCompletion(() -> alertEmitters.remove(emitter));
-        emitter.onTimeout(() -> alertEmitters.remove(emitter));
-        emitter.onError(e -> alertEmitters.remove(emitter));
-
-        log.info("➕ Client SSE alertes : {} abonnés", alertEmitters.size());
-
-        // Envoi de l’état initial de chaque device
-        devices.forEach((deviceId, st) -> {
-            String init = String.format(
-                    "{\"type\":\"INITIAL_STATUS\",\"deviceId\":\"%s\",\"connected\":%b}",
-                    deviceId, st.connected
-            );
-            safeSend(emitter, "initial-status", init);
-        });
-    }
-
-    /** Exposé aux controllers */
-    public Map<String, Boolean> getAllStatuses() {
-        Map<String, Boolean> out = new ConcurrentHashMap<>();
-        devices.forEach((id, st) -> out.put(id, st.connected));
-        return out;
-    }
-
-    public boolean isConnected(String deviceId) {
-        DeviceStatus st = devices.get(deviceId);
-        return st != null && st.connected;
-    }
-
-    /* ======== Internes ======== */
+    /* ================== Internes ================== */
 
     private void sendConnectionAlert(String deviceId, boolean connected) {
         String json = String.format(
                 "{\"type\":\"CONNECTION_STATUS\",\"deviceId\":\"%s\",\"connected\":%b,\"timestamp\":\"%s\"}",
                 deviceId, connected, LocalDateTime.now()
         );
-        broadcast(connected ? "device-connected" : "device-disconnected", json);
+        emit(deviceId, connected ? "device-connected" : "device-disconnected", json);
+    }
+
+    /** Émet uniquement aux abonnés qui acceptent ce deviceId */
+    private void emit(String deviceId, String event, String data) {
+        subscribers.removeIf(sub -> {
+            if (!sub.accepts(deviceId)) return false; // on garde l'abonné mais on ne lui envoie pas cet event
+            if (!safeSend(sub.emitter, event, data)) {
+                try { sub.emitter.complete(); } catch (Exception ignore) {}
+                return true; // retire l'émetteur cassé
+            }
+            return false;
+        });
     }
 
     private void broadcast(String event, String data) {
-        alertEmitters.removeIf(em -> {
-            if (!safeSend(em, event, data)) {
-                try { em.complete(); } catch (Exception ignore) {}
-                return true; // retire l'émetteur cassé
+        subscribers.removeIf(sub -> {
+            if (!safeSend(sub.emitter, event, data)) {
+                try { sub.emitter.complete(); } catch (Exception ignore) {}
+                return true;
             }
             return false;
         });
@@ -144,11 +192,9 @@ public class DeviceConnectionMonitor {
             em.send(SseEmitter.event().name(event).data(data));
             return true;
         } catch (IOException io) {
-            // client fermé / socket reset : bruit normal → DEBUG
             log.debug("SSE write failed (client closed): {}", io.getMessage());
             return false;
         } catch (Exception e) {
-            // autre erreur inattendue : on la log en WARN, puis on retire l'émetteur
             log.warn("SSE send error: {}", e.toString());
             return false;
         }
