@@ -7,5 +7,5 @@ class Env {
   /// ex. "https://breach-serves-respondents-indirect.trycloudflare.com"
   /// ou   "http://192.168.1.10:8081"
   static const String gatewayBaseUrl =
-      'https://urban-excessive-move-edit.trycloudflare.com';
+      'https://identifies-identifies-pair-ratios.trycloudflare.com';
 }
