@@ -22,6 +22,7 @@ public class AuthController {
     @PostMapping("/signup")
     public ResponseEntity<?> signup(@Valid @RequestBody SignupRequest req) {
         String userId = signupService.signup(req.fullName(), req.email(), req.password());
-        return ResponseEntity.ok(Map.of("userId", userId, "message", "Account created"));
+        return ResponseEntity.status(201).body(Map.of("userId", userId, "message", "Account created"));
     }
+
 }
