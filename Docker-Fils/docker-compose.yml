@@ -20,7 +20,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: sensor-service
-      POSTGRES_PASSWORD: 12345f 
+      POSTGRES_PASSWORD: 12345f
       POSTGRES_DB: sensor-db
     ports:
       - "5445:5432"
