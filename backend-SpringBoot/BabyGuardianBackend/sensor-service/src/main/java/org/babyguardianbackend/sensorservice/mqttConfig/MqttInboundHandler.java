@@ -2,219 +2,186 @@ package org.babyguardianbackend.sensorservice.mqttConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.babyguardianbackend.sensorservice.dao.DeviceRepository;
 import org.babyguardianbackend.sensorservice.dao.SensorReadingRepository;
 import org.babyguardianbackend.sensorservice.entities.Device;
 import org.babyguardianbackend.sensorservice.entities.SensorReading;
 import org.babyguardianbackend.sensorservice.monitoring.DeviceConnectionMonitor;
-import org.babyguardianbackend.sensorservice.service.DeviceOwnershipService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.mqtt.support.MqttHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class MqttInboundHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(MqttInboundHandler.class);
-    private final ObjectMapper mapper = new ObjectMapper();
-
-    // TTL internes (pour statut dérivé)
-    private static final long VITALS_TTL_MS = 15_000;
-    private static final long STATUS_TTL_MS = 20_000;
-
-    private final SensorReadingRepository readingRepo;
     private final DeviceRepository deviceRepo;
+    private final SensorReadingRepository readingRepo;
     private final DeviceConnectionMonitor monitor;
-    private final DeviceOwnershipService ownershipService;
 
-    // queue pour lecture temps réel
-    private final BlockingQueue<SensorReading> realtimeQueue = new ArrayBlockingQueue<>(5);
+    private final ObjectMapper om = new ObjectMapper();
 
-    // caches statut
-    private final Map<String, String> deviceStatus = new ConcurrentHashMap<>();
-    private final Map<String, Long>   lastStatusAt = new ConcurrentHashMap<>();
-    private final Map<String, Long>   lastVitalsAt = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, String> statusByDevice = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, CompletableFuture<SensorReading>> realtimeWaiters = new ConcurrentHashMap<>();
 
-    public MqttInboundHandler(
-            SensorReadingRepository readingRepo,
-            DeviceRepository deviceRepo,
-            DeviceConnectionMonitor monitor,
-            DeviceOwnershipService ownershipService
-    ) {
-        this.readingRepo = readingRepo;
-        this.deviceRepo = deviceRepo;
-        this.monitor = monitor;
-        this.ownershipService = ownershipService;
+    private String norm(String deviceId) {
+        return deviceId == null ? null : deviceId.trim().toLowerCase();
+    }
+
+    public String getStatus(String deviceId) {
+        return statusByDevice.getOrDefault(norm(deviceId), "unknown");
+    }
+
+    public SensorReading waitForRealtimeReading(String deviceId, long timeout, TimeUnit unit) throws InterruptedException {
+        String id = norm(deviceId);
+        CompletableFuture<SensorReading> fut = new CompletableFuture<>();
+
+        // si un waiter existait déjà (rare), on le remplace proprement
+        CompletableFuture<SensorReading> prev = realtimeWaiters.put(id, fut);
+        if (prev != null && !prev.isDone()) {
+            prev.completeExceptionally(new CancellationException("Replaced by a new realtime waiter"));
+        }
+
+        try {
+            return fut.get(timeout, unit);
+        } catch (TimeoutException e) {
+            return null;
+        } catch (ExecutionException e) {
+            log.warn("Realtime waiter error: {}", e.getMessage());
+            return null;
+        } finally {
+            // retire seulement si c’est encore le même future
+            realtimeWaiters.remove(id, fut);
+        }
     }
 
     @ServiceActivator(inputChannel = "mqttInputChannel")
-    public void handle(Message<String> message) {
-        final String topic = (String) message.getHeaders().get(MqttHeaders.RECEIVED_TOPIC);
-        final String payload = message.getPayload();
+    public void handle(Message<?> msg) {
+        String topic = (String) msg.getHeaders().get(MqttHeaders.RECEIVED_TOPIC);
+        String payload = String.valueOf(msg.getPayload());
+        if (topic == null) return;
 
         try {
-            // 0) Sync proprietaire : app/owner/<deviceId>
-            if (topic.startsWith("app/owner/")) {
-                final String deviceId = topic.substring("app/owner/".length());
-
-                if (payload == null || payload.isBlank()) {
-                    ownershipService.setOwnerFromDevice(deviceId, null);
-                    log.info("Owner cleared by device for {}", deviceId);
-                    return;
-                }
-
-                JsonNode node = mapper.readTree(payload);
-                String owner = node.hasNonNull("ownerUserId") ? node.get("ownerUserId").asText() : null;
-                ownershipService.setOwnerFromDevice(deviceId, owner);
-                log.info("Owner set by device for {} -> {}", deviceId, owner);
+            if (topic.startsWith("iot/status/")) {
+                handleStatus(topic, payload);
                 return;
             }
 
-            // 1) Statut presence : app/status/<deviceId>
-            if (topic.startsWith("app/status/")) {
-                final String deviceId = topic.substring("app/status/".length());
-                final String normalized = (payload == null ? "unknown" : payload.trim().toLowerCase());
-
-                deviceStatus.put(deviceId, normalized);
-                lastStatusAt.put(deviceId, System.currentTimeMillis());
-
-                if ("online".equals(normalized)) {
-                    monitor.markConnected(deviceId);
-                } else if ("offline".equals(normalized)) {
-                    monitor.markDisconnected(deviceId);
-                }
-                log.info("Status MQTT: {} -> {}", deviceId, normalized);
-                return;
-            }
-
-            // 2) Mesures vitales : OBLIGATOIREMENT iot/vitals/<deviceId>
             if (topic.startsWith("iot/vitals/")) {
-                final String topicDeviceId = topic.substring("iot/vitals/".length()).trim();
-                if (topicDeviceId.isBlank()) {
-                    log.warn("Invalid topic: missing deviceId in {}", topic);
-                    return;
-                }
-
-                final JsonNode j = mapper.readTree(payload);
-
-                // 2.1 deviceId JSON obligatoire + doit matcher celui du topic
-                if (!j.hasNonNull("deviceId")) {
-                    log.warn("Invalid payload: missing deviceId (topic={}, payload={})", topic, payload);
-                    return;
-                }
-                final String jsonDeviceId = j.get("deviceId").asText().trim();
-                if (jsonDeviceId.isBlank() || !jsonDeviceId.equals(topicDeviceId)) {
-                    log.warn("DeviceId mismatch: topic='{}' vs json='{}' (payload={})",
-                            topicDeviceId, jsonDeviceId, payload);
-                    return;
-                }
-
-                // 2.2 MAC obligatoire et non vide
-                if (!j.hasNonNull("mac")) {
-                    log.warn("Invalid payload: missing mac (topic={}, payload={})", topic, payload);
-                    return;
-                }
-                final String mac = j.get("mac").asText().trim();
-                if (mac.isBlank()) {
-                    log.warn("Invalid payload: empty mac (topic={}, payload={})", topic, payload);
-                    return;
-                }
-
-                // 2.3 Upsert device (maj MAC si change)
-                Device device = deviceRepo.findByDeviceId(jsonDeviceId)
-                        .map(existing -> {
-                            if (!mac.equals(existing.getMacAddress())) {
-                                existing.setMacAddress(mac);
-                                deviceRepo.save(existing);
-                                log.info("Updated MAC for {} -> {}", jsonDeviceId, mac);
-                            }
-                            return existing;
-                        })
-                        .orElseGet(() -> {
-                            Device d = new Device();
-                            d.setDeviceId(jsonDeviceId);
-                            d.setMacAddress(mac); // NOT NULL (contrainte)
-                            d = deviceRepo.save(d);
-                            log.info("Registered new device {} (MAC={})", jsonDeviceId, mac);
-                            return d;
-                        });
-
-                // 2.4 Lecture capteurs
-                SensorReading r = new SensorReading();
-                r.setDevice(device);
-
-                if (j.hasNonNull("heartRate"))   r.setHeartRate(j.get("heartRate").asInt());
-                if (j.hasNonNull("spo2"))        r.setSpo2(j.get("spo2").asInt());
-                if (j.hasNonNull("temp"))        r.setTemp(j.get("temp").asDouble());
-                else if (j.hasNonNull("temperature")) r.setTemp(j.get("temperature").asDouble());
-
-                Boolean finger = null;
-                if (j.has("finger") && !j.get("finger").isNull()) {
-                    finger = j.get("finger").asBoolean();
-                } else if (j.has("fingerDetected") && !j.get("fingerDetected").isNull()) {
-                    finger = j.get("fingerDetected").asBoolean();
-                } else {
-                    // fallback heuristique
-                    finger = ((r.getHeartRate() != null && r.getHeartRate() > 0)
-                            || (r.getSpo2() != null && r.getSpo2() > 0));
-                }
-                r.setFinger(finger);
-
-                readingRepo.save(r);
-                log.info("Saved reading for {} (HR={}, SpO2={}, Temp={}, Finger={})",
-                        jsonDeviceId, r.getHeartRate(), r.getSpo2(), r.getTemp(), r.getFinger());
-
-                // 2.5 Monitoring & caches statut
-                monitor.recordDeviceActivity(jsonDeviceId);
-                long now = System.currentTimeMillis();
-                lastVitalsAt.put(jsonDeviceId, now);
-                deviceStatus.put(jsonDeviceId, "online");
-                lastStatusAt.put(jsonDeviceId, now);
-
-                // push dans la queue /realtime
-                if (!realtimeQueue.offer(r)) {
-                    realtimeQueue.poll();
-                    realtimeQueue.offer(r);
-                }
+                // realtime si topic contient /realtime
+                boolean topicRealtime = topic.contains("/realtime");
+                handleVitals(topic, payload, topicRealtime);
                 return;
             }
 
-            // 3) autres topics : ignorés volontairement en Solution B (strict)
-            // log.debug("Topic ignoré (non pris en charge en mode strict): {}", topic);
-
+            log.debug("MQTT ignored topic={}", topic);
         } catch (Exception e) {
-            log.error("Failed to process MQTT message (topic={}, payload={})", topic, payload, e);
+            log.error("MQTT handler error topic={} payload={} err={}", topic, payload, e.toString());
         }
     }
 
-    /** Lecture temps réel avec timeout (utilisée par /api/sensors/realtime/{deviceId}) */
-    public SensorReading waitForRealtimeReading(long timeout, TimeUnit unit) throws InterruptedException {
-        return realtimeQueue.poll(timeout, unit);
+    private void handleStatus(String topic, String payload) {
+        String deviceId = extractDeviceId(topic);
+        if (deviceId == null) return;
+        deviceId = norm(deviceId);
+
+        String st = (payload == null ? "unknown" : payload.trim().toUpperCase());
+        statusByDevice.put(deviceId, st);
+
+        if ("ONLINE".equals(st)) monitor.markConnected(deviceId);
+        else if ("OFFLINE".equals(st)) monitor.markDisconnected(deviceId);
+
+        log.info("[MQTT] status {} => {}", deviceId, st);
     }
 
-    /** Statut dérivé pour UI/contrôleurs si utile */
-    public String getStatus(String deviceId) {
-        long now = System.currentTimeMillis();
+    private void handleVitals(String topic, String payload, boolean topicRealtime) throws Exception {
+        String deviceId = extractDeviceId(topic);
+        if (deviceId == null) return;
+        deviceId = norm(deviceId);
 
-        Long vitalsAt = lastVitalsAt.get(deviceId);
-        if (vitalsAt != null && (now - vitalsAt) <= VITALS_TTL_MS) return "ONLINE";
+        Device device = upsertDevice(deviceId);
 
-        String status = deviceStatus.get(deviceId);
-        Long statusAt = lastStatusAt.get(deviceId);
-        if (status != null && statusAt != null && (now - statusAt) <= STATUS_TTL_MS) {
-            if ("online".equalsIgnoreCase(status))  return "ONLINE";
-            if ("offline".equalsIgnoreCase(status)) return "OFFLINE";
+        JsonNode j = om.readTree(payload);
+
+        Integer hr = readInt(j, "heartRate");
+        Integer spo2 = readInt(j, "spo2");
+
+        Double temp = readDouble(j, "temp");
+        if (temp == null) temp = readDouble(j, "temperature");
+
+        Boolean finger = readBool(j, "finger");
+
+        SensorReading r = new SensorReading();
+        r.setDevice(device);
+        r.setHeartRate(hr);
+        r.setSpo2(spo2);
+        r.setTemp(temp);
+        r.setFinger(finger);
+
+        SensorReading saved = readingRepo.save(r);
+
+        // activity => connecté
+        monitor.recordDeviceActivity(deviceId);
+
+        // realtime si topic /realtime OU payload realtime=true
+        boolean payloadRealtime = j.has("realtime") && j.get("realtime").asBoolean(false);
+        boolean realtime = topicRealtime || payloadRealtime;
+
+        if (realtime) {
+            CompletableFuture<SensorReading> fut = realtimeWaiters.get(deviceId);
+            if (fut != null && !fut.isDone()) fut.complete(saved);
         }
-        if (vitalsAt != null && (now - vitalsAt) > VITALS_TTL_MS) return "OFFLINE";
-        return "unknown";
+
+        log.debug("[MQTT] vitals {} realtime={} hr={} spo2={} temp={}", deviceId, realtime, hr, spo2, temp);
+    }
+
+    private Device upsertDevice(String deviceId) {
+        return deviceRepo.findByDeviceId(deviceId)
+                .orElseGet(() -> {
+                    Device d = new Device();
+                    d.setDeviceId(deviceId);
+                    d.setMacAddress(macFromDeviceId(deviceId)); // NOT NULL
+                    return deviceRepo.save(d);
+                });
+    }
+
+    private String extractDeviceId(String topic) {
+        // iot/vitals/<deviceId>[/realtime]
+        // iot/status/<deviceId>
+        String[] parts = topic.split("/");
+        if (parts.length < 3) return null;
+        return parts[2];
+    }
+
+    private String macFromDeviceId(String deviceId) {
+        int idx = deviceId.indexOf("-");
+        String hex = (idx >= 0 ? deviceId.substring(idx + 1) : deviceId);
+        hex = hex.replace(":", "").trim().toUpperCase();
+        if (hex.length() != 12) return hex;
+
+        return hex.substring(0,2)+":"+hex.substring(2,4)+":"+hex.substring(4,6)+":"+
+                hex.substring(6,8)+":"+hex.substring(8,10)+":"+hex.substring(10,12);
+    }
+
+    private Integer readInt(JsonNode j, String k) {
+        JsonNode n = j.get(k);
+        return (n == null || n.isNull()) ? null : n.asInt();
+    }
+
+    private Double readDouble(JsonNode j, String k) {
+        JsonNode n = j.get(k);
+        return (n == null || n.isNull()) ? null : n.asDouble();
+    }
+
+    private Boolean readBool(JsonNode j, String k) {
+        JsonNode n = j.get(k);
+        return (n == null || n.isNull()) ? null : n.asBoolean();
     }
 }
+
