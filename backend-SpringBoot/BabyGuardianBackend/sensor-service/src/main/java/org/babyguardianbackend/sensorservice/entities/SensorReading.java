@@ -2,34 +2,34 @@ package org.babyguardianbackend.sensorservice.entities;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import java.time.Instant;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Entity @Table(name = "sensor_readings")
+@Entity
+@Table(name = "sensor_readings")
 @Data
 public class SensorReading {
 
-    public static final String DEFAULT_DEVICE_ID = "device-1";
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(nullable = false, updatable = false)
     private UUID id;
 
-    @Column(nullable = false)
-    private String deviceId = DEFAULT_DEVICE_ID;
+    // Jointure par la STRING devices.device_id (pas l'UUID PK)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "device_id",                 // colonne FK côté sensor_readings (VARCHAR)
+            referencedColumnName = "device_id", // colonne cible côté devices (VARCHAR)
+            nullable = false
+    )
+    private Device device;
 
-    private Integer heartRate;     // bpm
-    private Integer spo2;          // %
-    private Double  temp;          // °C (une seule valeur consolidée)
-    private Boolean finger;        // <--- présence du doigt
+    private Integer heartRate;
+    private Integer spo2;
+    private Double temp;
+    private Boolean finger;
 
-    @Column(nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @PrePersist
-    public void prePersist() {
-        if (deviceId == null || deviceId.isBlank()) deviceId = DEFAULT_DEVICE_ID;
-        if (createdAt == null) createdAt = Instant.now();
-    }
+    @CreationTimestamp
+    private LocalDateTime createdAt;
 }
