@@ -80,9 +80,20 @@ public class MqttConfig {
 
     @Bean
     @ServiceActivator(inputChannel = "mqttOutboundChannel")
-    public MessageHandler mqttOutbound(MqttPahoClientFactory factory) {
-        MqttPahoMessageHandler handler = new MqttPahoMessageHandler("spring-publisher", factory);
+    public MessageHandler mqttOutbound(
+            MqttPahoClientFactory factory,
+            @Value("${app.mqtt.publisherClientId:spring-publisher-${random.value}}") String pubClientId,
+            @Value("${app.mqtt.qos:1}") int qos,
+            @Value("${app.mqtt.defaultPublishTopic:iot/alerts/default}") String defaultTopic
+    ) {
+        MqttPahoMessageHandler handler = new MqttPahoMessageHandler(pubClientId, factory);
         handler.setAsync(true);
+
+        // Si tu oublies TOPIC dans le header, il publiera sur ce topic par défaut
+        handler.setDefaultTopic(defaultTopic);
+        handler.setDefaultQos(qos);
+
         return handler;
     }
+
 }
