@@ -4,11 +4,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.babyguardianbackend.sensorservice.cleaning.DataCleaningService;
+import org.babyguardianbackend.sensorservice.cleaning.VitalClean;
+import org.babyguardianbackend.sensorservice.cleaning.VitalRaw;
 import org.babyguardianbackend.sensorservice.dao.DeviceRepository;
 import org.babyguardianbackend.sensorservice.dao.SensorReadingRepository;
 import org.babyguardianbackend.sensorservice.entities.Device;
 import org.babyguardianbackend.sensorservice.entities.SensorReading;
 import org.babyguardianbackend.sensorservice.monitoring.DeviceConnectionMonitor;
+import org.babyguardianbackend.sensorservice.service.VitalsProducer;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.mqtt.support.MqttHeaders;
 import org.springframework.messaging.Message;
@@ -24,6 +28,8 @@ public class MqttInboundHandler {
     private final DeviceRepository deviceRepo;
     private final SensorReadingRepository readingRepo;
     private final DeviceConnectionMonitor monitor;
+    private final DataCleaningService cleaningService;
+    private final VitalsProducer vitalsProducer;
 
     private final ObjectMapper om = new ObjectMapper();
 
@@ -42,7 +48,6 @@ public class MqttInboundHandler {
         String id = norm(deviceId);
         CompletableFuture<SensorReading> fut = new CompletableFuture<>();
 
-        // si un waiter existait déjà (rare), on le remplace proprement
         CompletableFuture<SensorReading> prev = realtimeWaiters.put(id, fut);
         if (prev != null && !prev.isDone()) {
             prev.completeExceptionally(new CancellationException("Replaced by a new realtime waiter"));
@@ -56,7 +61,6 @@ public class MqttInboundHandler {
             log.warn("Realtime waiter error: {}", e.getMessage());
             return null;
         } finally {
-            // retire seulement si c’est encore le même future
             realtimeWaiters.remove(id, fut);
         }
     }
@@ -68,13 +72,14 @@ public class MqttInboundHandler {
         if (topic == null) return;
 
         try {
-            if (topic.startsWith("iot/status/")) {
+            // Supporte iot/status/* ET app/status/* (au cas où)
+            if (topic.startsWith("iot/status/") || topic.startsWith("app/status/")) {
                 handleStatus(topic, payload);
                 return;
             }
 
-            if (topic.startsWith("iot/vitals/")) {
-                // realtime si topic contient /realtime
+            // Supporte iot/vitals/* ET app/vitals/*
+            if (topic.startsWith("iot/vitals/") || topic.startsWith("app/vitals/")) {
                 boolean topicRealtime = topic.contains("/realtime");
                 handleVitals(topic, payload, topicRealtime);
                 return;
@@ -101,44 +106,66 @@ public class MqttInboundHandler {
     }
 
     private void handleVitals(String topic, String payload, boolean topicRealtime) throws Exception {
-        String deviceId = extractDeviceId(topic);
-        if (deviceId == null) return;
-        deviceId = norm(deviceId);
+        String deviceIdFromTopic = extractDeviceId(topic);
+        if (deviceIdFromTopic == null) return;
+        deviceIdFromTopic = norm(deviceIdFromTopic);
 
-        Device device = upsertDevice(deviceId);
+        // dès qu'on reçoit une mesure => activité device (même si on rejette la valeur après)
+        monitor.recordDeviceActivity(deviceIdFromTopic);
 
         JsonNode j = om.readTree(payload);
 
-        Integer hr = readInt(j, "heartRate");
-        Integer spo2 = readInt(j, "spo2");
+        // deviceId peut exister dans le JSON, sinon fallback sur topic
+        String deviceIdFromPayload = readText(j, "deviceId");
+        String effectiveDeviceId = norm((deviceIdFromPayload != null && !deviceIdFromPayload.isBlank())
+                ? deviceIdFromPayload
+                : deviceIdFromTopic);
 
-        Double temp = readDouble(j, "temp");
-        if (temp == null) temp = readDouble(j, "temperature");
+        // Récupération flexible des champs (plusieurs clés possibles)
+        Double temp = firstDouble(j, "temp", "temperature", "tempC");
+        Double spo2 = firstDouble(j, "spo2", "SpO2");
+        Double hr   = firstDouble(j, "heartRate", "hr", "bpm");
+        Long ts     = firstLong(j, "timestamp", "ts", "time");
+
+        // Nettoyage (REJECT ou CLAMP selon app.cleaning.mode)
+        VitalClean clean;
+        try {
+            VitalRaw raw = new VitalRaw(effectiveDeviceId, temp, spo2, hr, ts);
+            clean = cleaningService.cleanOrThrow(raw, effectiveDeviceId);
+            // Envoi vers Kafka
+            vitalsProducer.sendCleanVitals(deviceIdFromTopic,clean);
+        } catch (IllegalArgumentException ex) {
+            // mode REJECT => on ignore la mesure
+            log.warn("[MQTT] vitals REJECTED device={} reason={} payload={}", effectiveDeviceId, ex.getMessage(), payload);
+            return;
+        }
+
+        Device device = upsertDevice(effectiveDeviceId);
 
         Boolean finger = readBool(j, "finger");
 
         SensorReading r = new SensorReading();
         r.setDevice(device);
-        r.setHeartRate(hr);
-        r.setSpo2(spo2);
-        r.setTemp(temp);
+        r.setTemp(clean.temperatureC());
+        r.setSpo2(clean.spo2());
+        r.setHeartRate(clean.heartRate());
         r.setFinger(finger);
+
+        // Si ton entity a un champ timestamp/createdAt, décommente et adapte :
+        // r.setTimestamp(clean.timestamp());
 
         SensorReading saved = readingRepo.save(r);
 
-        // activity => connecté
-        monitor.recordDeviceActivity(deviceId);
-
-        // realtime si topic /realtime OU payload realtime=true
         boolean payloadRealtime = j.has("realtime") && j.get("realtime").asBoolean(false);
         boolean realtime = topicRealtime || payloadRealtime;
 
         if (realtime) {
-            CompletableFuture<SensorReading> fut = realtimeWaiters.get(deviceId);
+            CompletableFuture<SensorReading> fut = realtimeWaiters.get(effectiveDeviceId);
             if (fut != null && !fut.isDone()) fut.complete(saved);
         }
 
-        log.debug("[MQTT] vitals {} realtime={} hr={} spo2={} temp={}", deviceId, realtime, hr, spo2, temp);
+        log.debug("[MQTT] vitals {} quality={} realtime={} hr={} spo2={} temp={}",
+                effectiveDeviceId, clean.quality(), realtime, clean.heartRate(), clean.spo2(), clean.temperatureC());
     }
 
     private Device upsertDevice(String deviceId) {
@@ -154,6 +181,7 @@ public class MqttInboundHandler {
     private String extractDeviceId(String topic) {
         // iot/vitals/<deviceId>[/realtime]
         // iot/status/<deviceId>
+        // app/vitals/<deviceId> ...
         String[] parts = topic.split("/");
         if (parts.length < 3) return null;
         return parts[2];
@@ -169,14 +197,50 @@ public class MqttInboundHandler {
                 hex.substring(6,8)+":"+hex.substring(8,10)+":"+hex.substring(10,12);
     }
 
-    private Integer readInt(JsonNode j, String k) {
+    // --------- Helpers robustes ---------
+
+    private String readText(JsonNode j, String k) {
         JsonNode n = j.get(k);
-        return (n == null || n.isNull()) ? null : n.asInt();
+        return (n == null || n.isNull()) ? null : n.asText(null);
+    }
+
+    private Double firstDouble(JsonNode j, String... keys) {
+        for (String k : keys) {
+            Double v = readDouble(j, k);
+            if (v != null) return v;
+        }
+        return null;
+    }
+
+    private Long firstLong(JsonNode j, String... keys) {
+        for (String k : keys) {
+            Long v = readLong(j, k);
+            if (v != null) return v;
+        }
+        return null;
     }
 
     private Double readDouble(JsonNode j, String k) {
         JsonNode n = j.get(k);
-        return (n == null || n.isNull()) ? null : n.asDouble();
+        if (n == null || n.isNull()) return null;
+        // support nombre OU string "36.7"
+        if (n.isNumber()) return n.asDouble();
+        if (n.isTextual()) {
+            try { return Double.parseDouble(n.asText().trim()); }
+            catch (Exception ignored) { return null; }
+        }
+        return null;
+    }
+
+    private Long readLong(JsonNode j, String k) {
+        JsonNode n = j.get(k);
+        if (n == null || n.isNull()) return null;
+        if (n.isNumber()) return n.asLong();
+        if (n.isTextual()) {
+            try { return Long.parseLong(n.asText().trim()); }
+            catch (Exception ignored) { return null; }
+        }
+        return null;
     }
 
     private Boolean readBool(JsonNode j, String k) {
@@ -184,4 +248,3 @@ public class MqttInboundHandler {
         return (n == null || n.isNull()) ? null : n.asBoolean();
     }
 }
-
