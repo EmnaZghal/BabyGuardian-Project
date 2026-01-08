@@ -28,7 +28,7 @@ public class DataCleaningService {
         // Fahrenheit -> Celsius (si besoin)
         if (temp > 60) temp = (temp - 32) * (5.0 / 9.0);
 
-        // ✅ MODE TEST : accepte tout (pas de validation)
+        //  MODE TEST : accepte tout (pas de validation)
         if ("TEST".equalsIgnoreCase(p.getMode())) {
             return new VitalClean(
                     deviceId,
