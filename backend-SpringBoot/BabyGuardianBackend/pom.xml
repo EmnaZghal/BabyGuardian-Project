@@ -26,6 +26,7 @@
 		<module>discovery-service</module>
 		<module>gateway-service</module>
 		<module>sensor-service</module>
+		<module>alert-service</module>
 	</modules>
 
 	<properties>

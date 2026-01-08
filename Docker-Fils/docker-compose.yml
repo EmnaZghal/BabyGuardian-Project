@@ -27,6 +27,19 @@ services:
     volumes:
       - sensor_data:/var/lib/postgresql/data
 
+  alert_db:
+    image: postgres:17.5-alpine3.21
+    container_name: alert_db
+    restart: always
+    environment:
+      POSTGRES_USER: alert-service
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: alert-db
+    ports:
+      - "5446:5432"
+    volumes:
+      - alert_data:/var/lib/postgresql/data
+
   vault:
     image: hashicorp/vault:latest
     container_name: dev-vault
@@ -79,9 +92,6 @@ services:
       timeout: 5s
       retries: 3
 
-  # -----------------------
-  # Kafka (Apache Kafka image)
-  # -----------------------
   kafka:
     image: apache/kafka:4.1.1
     container_name: dev-kafka
@@ -89,7 +99,6 @@ services:
     ports:
       - "9092:9092"
     environment:
-      # Kafka en mode KRaft (pas besoin de Zookeeper)
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
@@ -101,9 +110,6 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 
-  # -----------------------
-  # Kafka UI (optionnel)
-  # -----------------------
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: dev-kafka-ui
