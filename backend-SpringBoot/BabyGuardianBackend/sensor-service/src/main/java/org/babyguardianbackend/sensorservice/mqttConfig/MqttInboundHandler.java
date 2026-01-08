@@ -13,6 +13,7 @@ import org.babyguardianbackend.sensorservice.entities.Device;
 import org.babyguardianbackend.sensorservice.entities.SensorReading;
 import org.babyguardianbackend.sensorservice.monitoring.DeviceConnectionMonitor;
 import org.babyguardianbackend.sensorservice.service.VitalsProducer;
+import org.babyguardianbackend.sensorservice.webSocket.handler.VitalWsHandler;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.mqtt.support.MqttHeaders;
 import org.springframework.messaging.Message;
@@ -30,6 +31,7 @@ public class MqttInboundHandler {
     private final DeviceConnectionMonitor monitor;
     private final DataCleaningService cleaningService;
     private final VitalsProducer vitalsProducer;
+    private final VitalWsHandler wsHandler;
 
     private final ObjectMapper om = new ObjectMapper();
 
@@ -134,6 +136,7 @@ public class MqttInboundHandler {
             clean = cleaningService.cleanOrThrow(raw, effectiveDeviceId);
             // Envoi vers Kafka
             vitalsProducer.sendCleanVitals(deviceIdFromTopic,clean);
+            wsHandler.sendToDevice(deviceIdFromTopic, om.writeValueAsString(clean));
         } catch (IllegalArgumentException ex) {
             // mode REJECT => on ignore la mesure
             log.warn("[MQTT] vitals REJECTED device={} reason={} payload={}", effectiveDeviceId, ex.getMessage(), payload);
