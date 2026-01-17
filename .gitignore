@@ -1,0 +1,19 @@
+# Python venv
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# ML artifacts
+*.joblib
+*.pkl
+*.onnx
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
