@@ -1,7 +1,7 @@
 package com.example.alertservice.websocket;
 
 
-import com.example.alertservice.websocket.VitalWsHandler;
+
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;

@@ -27,6 +27,7 @@
 		<module>gateway-service</module>
 		<module>sensor-service</module>
 		<module>alert-service</module>
+		<module>feature-ml-service</module>
 	</modules>
 
 	<properties>
