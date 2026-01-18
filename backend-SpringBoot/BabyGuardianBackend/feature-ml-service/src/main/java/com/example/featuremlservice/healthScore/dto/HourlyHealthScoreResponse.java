@@ -3,11 +3,12 @@ package com.example.featuremlservice.healthScore.dto;
 
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 public record HourlyHealthScoreResponse(
         String deviceId,
-        Instant hourEnd,
+        LocalDateTime  hourEnd,
         String state,          // NORMAL/WARN/CRITICAL/INSUFFICIENT_DATA
         double score,          // 0..100
         String riskLevel,      // Low/Medium/High
