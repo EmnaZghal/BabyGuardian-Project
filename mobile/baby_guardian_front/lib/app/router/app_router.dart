@@ -1,40 +1,95 @@
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import 'package:baby_guardian_front/features/auth/views/login_page.dart';
 import 'package:baby_guardian_front/features/auth/views/sign_up_page.dart';
-import 'package:baby_guardian_front/features/home/home_page.dart';
+import 'package:baby_guardian_front/features/babies_page_selection/views/baby_select_page.dart';
+
+import 'package:baby_guardian_front/features/shell/main_shell_page.dart';
+import 'package:baby_guardian_front/features/home/views/home_page.dart';
+import 'package:baby_guardian_front/features/baby_settings/views/baby_settings.dart';
+import 'package:baby_guardian_front/features/alerts/views/alerts_page.dart';
+import 'package:baby_guardian_front/features/assistant/views/assistant_page.dart';
+import 'package:baby_guardian_front/features/settings/views/settings_page.dart';
+import 'package:baby_guardian_front/features/health_status/views/health_status_page.dart';
+import 'package:baby_guardian_front/features/predictions/views/predictions_page.dart';
 
 class AppRouter {
-  // simulateur d’authentification (plus tard tu utiliseras un vrai service)
   static bool isLoggedIn = false;
 
+  static final _rootKey = GlobalKey<NavigatorState>();
+  static final _shellKey = GlobalKey<NavigatorState>();
+
   static final router = GoRouter(
+    navigatorKey: _rootKey,
     initialLocation: '/login',
     routes: [
       GoRoute(
         path: '/login',
+        parentNavigatorKey: _rootKey,
         builder: (context, state) => const LoginPage(),
       ),
       GoRoute(
         path: '/signup',
+        parentNavigatorKey: _rootKey,
         builder: (context, state) => const SignUpPage(),
       ),
+
+
       GoRoute(
-        path: '/home',
-        builder: (context, state) => const HomePage(),
+        path: '/select-baby',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const BabySelectPage(),
+      ),
+      GoRoute(
+        path: '/health-status',
+        builder: (context, state) => const HealthStatusPage(),
+      ),
+      GoRoute(
+        path: '/predictions',
+        builder: (context, state) => const PredictionsPage(),
+      ),
+
+      ShellRoute(
+        navigatorKey: _shellKey,
+        builder: (context, state, child) => MainShellPage(child: child),
+        routes: [
+          GoRoute(
+            path: '/home',
+            parentNavigatorKey: _shellKey,
+            builder: (context, state) => const HomePage(),
+          ),
+          GoRoute(
+            path: '/baby-settings',
+            parentNavigatorKey: _shellKey,
+            builder: (context, state) => const BabySettings(),
+          ),
+          GoRoute(
+            path: '/alerts',
+            parentNavigatorKey: _shellKey,
+            builder: (context, state) => const AlertsPage(),
+          ),
+          GoRoute(
+            path: '/assistant',
+            parentNavigatorKey: _shellKey,
+            builder: (context, state) => const AssistantPage(),
+          ),
+          GoRoute(
+            path: '/settings',
+            parentNavigatorKey: _shellKey,
+            builder: (context, state) => const SettingsPage(),
+          ),
+        ],
       ),
     ],
-
-    // Redirection automatique (par ex. si pas loggé → forcer login)
     redirect: (context, state) {
-      final loggingIn = state.fullPath == '/login' || state.fullPath == '/signup';
+      final path = state.uri.path;
+      final isAuthPage = path == '/login' || path == '/signup';
 
-      if (!isLoggedIn && !loggingIn) {
-        return '/login';
-      }
-      if (isLoggedIn && loggingIn) {
-        return '/home';
-      }
-      return null; // pas de redirection
+      if (!isLoggedIn && !isAuthPage) return '/login';
+      if (isLoggedIn && isAuthPage) return '/select-baby';
+
+      return null;
     },
   );
 }
