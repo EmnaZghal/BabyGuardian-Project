@@ -4,6 +4,7 @@ package com.example.featuremlservice.healthScore.services;
 
 
 import com.example.featuremlservice.healthScore.dto.RiskPredictRequest;
+import com.example.featuremlservice.healthScore.dto.RiskPredictResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -17,12 +18,12 @@ public class RiskScoreClientService {
     @Qualifier("riskScoreWebClient")
     private final WebClient web;
 
-    public RiskPredictRequest predict(Object payload) {
+    public RiskPredictResponse predict(Object payload) {
         return web.post()
                 .uri("/predict")
                 .bodyValue(payload)
                 .retrieve()
-                .bodyToMono(RiskPredictRequest.class)
+                .bodyToMono(RiskPredictResponse.class)
                 .block();
     }
 }
