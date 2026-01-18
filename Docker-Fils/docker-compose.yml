@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 services:
   auth_db:
@@ -39,6 +39,19 @@ services:
       - "5446:5432"
     volumes:
       - alert_data:/var/lib/postgresql/data
+  
+  profile-db:
+    image: postgres:17.5-alpine3.21
+    container_name: profile_db
+    restart: always
+    environment:
+      POSTGRES_USER: profile-service
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: profile-db
+    ports:
+      - "5447:5432"
+    volumes:
+      - profile_data:/var/lib/postgresql/data
 
   vault:
     image: hashicorp/vault:latest
@@ -121,7 +134,34 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     depends_on:
       - kafka
-
+  ml_predict_vital_signs:
+    build:
+      context: "../BabyGuardien-ML/BabyGuardian-TSBoost"
+      dockerfile: "dockerfile"   # mets "Dockerfile" si ton fichier s'appelle Dockerfile
+    container_name: ml_predict_vital_signs
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - "../BabyGuardien-ML/BabyGuardian-TSBoost/models:/app/models:ro"
+  risk-scoring-api:
+    build:
+      context: "../BabyGuardien-ML/babyguardian-risk-scoring-api"
+      dockerfile: "dockerfile"
+    container_name: risk_scoring_api
+    restart: always
+    ports:
+      - "5001:5001"
+    depends_on:
+      - sensor_db
+      - alert_db
+      - mqtt
+    environment:
+      ARTIFACTS_DIR: "artifacts"
+    volumes:
+       - risk_artifacts:/app/artifacts
 volumes:
   auth_data:
     driver: local
@@ -132,4 +172,8 @@ volumes:
   mosquitto_data:
     driver: local
   mosquitto_log:
+    driver: local
+  risk_artifacts:
+    driver: local
+  profile_data:
     driver: local

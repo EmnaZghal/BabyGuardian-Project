@@ -28,4 +28,9 @@ public interface SensorReadingRepository extends JpaRepository<SensorReadingEnti
     default List<SensorReadingEntity> findLast60Before(String deviceId, Instant ts) {
         return findLastBefore(deviceId, ts, PageRequest.of(0, 60));
     }
+
+    List<SensorReadingEntity> findByDeviceIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtDesc(
+            String deviceId, Instant from, Instant to
+    );
+
 }
