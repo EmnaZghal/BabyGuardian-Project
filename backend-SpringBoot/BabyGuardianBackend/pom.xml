@@ -29,6 +29,7 @@
 		<module>alert-service</module>
 		<module>feature-ml-service</module>
 		<module>profile-service</module>
+		<module>chatbot-service</module>
 
 	</modules>
 
