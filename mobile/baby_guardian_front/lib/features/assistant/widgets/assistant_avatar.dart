@@ -1,22 +1,31 @@
 import 'package:flutter/material.dart';
 
 class AssistantAvatar extends StatelessWidget {
-  const AssistantAvatar({super.key});
+  final double size;
+  const AssistantAvatar({super.key, this.size = 40});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
-      width: 32,
-      height: 32,
-      decoration: const BoxDecoration(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF60A5FA), Color(0xFF22D3EE)], // blue -> cyan
+          colors: [
+            theme.colorScheme.primary,
+            theme.colorScheme.tertiary,
+          ],
         ),
       ),
-      child: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 16),
+      child: Center(
+        child: Icon(
+          Icons.smart_toy_outlined,
+          color: theme.colorScheme.onPrimary,
+          size: size * 0.55,
+        ),
+      ),
     );
   }
 }

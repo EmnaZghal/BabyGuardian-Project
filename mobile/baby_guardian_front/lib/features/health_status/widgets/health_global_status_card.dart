@@ -1,101 +1,106 @@
 import 'package:flutter/material.dart';
-import 'package:baby_guardian_front/shared/widgets/app_card.dart';
 
 class HealthGlobalStatusCard extends StatelessWidget {
-  final String babyName;
-  final int score; // out of 100
+  final String statusTitle;
+  final String statusSubtitle;
+  final int score; // 0..100
 
   const HealthGlobalStatusCard({
     super.key,
-    required this.babyName,
+    required this.statusTitle,
+    required this.statusSubtitle,
     required this.score,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
+    final cs = Theme.of(context).colorScheme;
+
+    final isGood = score >= 70;
+    final badgeBg = isGood ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2);
+    final badgeFg = isGood ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF86EFAC)), // green-300
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFECFDF5), // green-50
-            Colors.white,
-          ],
-        ),
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFDCFCE7), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.05),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          )
+        ],
       ),
       child: Column(
         children: [
           Row(
             children: [
               Container(
-                width: 62,
-                height: 62,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF22C55E), // green-500
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: badgeBg,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check_circle, color: Colors.white, size: 34),
+                child: Icon(Icons.check, color: badgeFg, size: 28),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Normal',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF111827),
-                      ),
+                    Text(
+                      statusTitle,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Everything is fine for $babyName',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF6B7280),
-                        fontWeight: FontWeight.w600,
-                      ),
+                      statusSubtitle,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF6B7280),
+                          ),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Health score',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF6B7280),
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF6B7280),
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
+              const Spacer(),
               Text(
                 '$score/100',
-                style: const TextStyle(
-                  fontSize: 18,
-                  color: Color(0xFF111827),
-                  fontWeight: FontWeight.w800,
-                ),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
               ),
             ],
           ),
           const SizedBox(height: 10),
+
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: score / 100.0,
-              minHeight: 8,
+              minHeight: 10,
+              value: (score.clamp(0, 100)) / 100.0,
               backgroundColor: const Color(0xFFE5E7EB),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFF22C55E)),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isGood ? const Color(0xFF22C55E) : const Color(0xFFEF4444),
+              ),
             ),
           ),
         ],

@@ -1,21 +1,24 @@
-import 'package:flutter/material.dart';
-
-enum RiskLevel { low, medium, high }
-
 class RiskItem {
-  final String id;
-  final String title;
-  final String description;
-  final int score; // 0..100
-  final IconData icon;
-  final RiskLevel level;
+  final String label;
+  final double score; // 0..1 ou % selon ton backend
+  final String? details;
 
-  const RiskItem({
-    required this.id,
-    required this.title,
-    required this.description,
+  RiskItem({
+    required this.label,
     required this.score,
-    required this.icon,
-    this.level = RiskLevel.low,
+    this.details,
   });
+
+  factory RiskItem.fromJson(Map<String, dynamic> json) {
+    return RiskItem(
+      label: (json['label'] ?? json['name'] ?? json['risk'] ?? '').toString(),
+      score: _toDouble(json['score'] ?? json['value'] ?? json['probability'] ?? 0),
+      details: json['details']?.toString(),
+    );
+  }
+
+  static double _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
 }

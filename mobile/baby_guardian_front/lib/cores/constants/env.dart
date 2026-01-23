@@ -8,5 +8,6 @@ class Env {
   /// ou   "http://192.168.1.10:8081"
   /// cloudflared tunnel --url http://localhost:8081
   static const String gatewayBaseUrl =
+
       'https://develops-destination-soft-england.trycloudflare.com';
 }

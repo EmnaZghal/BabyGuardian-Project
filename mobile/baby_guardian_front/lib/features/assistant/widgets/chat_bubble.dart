@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:baby_guardian_front/shared/widgets/app_card.dart';
 import '../models/chat_message.dart';
+import 'assistant_avatar.dart';
 
 class ChatBubble extends StatelessWidget {
   final ChatMessage message;
@@ -9,57 +9,108 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.type == MessageType.user;
-    final maxW = MediaQuery.of(context).size.width * 0.78; // ✅ au lieu de 320 fixe
+    final theme = Theme.of(context);
+    final isUser = message.role == ChatRole.user;
 
-    if (isUser) {
-      return ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxW),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: const LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [Color(0xFF3B82F6), Color(0xFF22D3EE)],
-            ),
-            boxShadow: const [
-              BoxShadow(
-                blurRadius: 14,
-                color: Color(0x14000000),
-                offset: Offset(0, 8),
-              )
-            ],
-          ),
-          child: Text(
-            message.content,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-              height: 1.35,
-            ),
-          ),
-        ),
-      );
-    }
+    final bubbleColor = isUser
+        ? theme.colorScheme.primary
+        : theme.colorScheme.surfaceContainerHighest;
 
-    // assistant bubble
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxW),
-      child: AppCard(
-        padding: const EdgeInsets.all(12),
-        child: Text(
-          message.content,
-          style: const TextStyle(
-            color: Color(0xFF111827),
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-            height: 1.35,
+    final textColor = isUser
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.onSurface;
+
+    final align = isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isUser) ...[
+            const AssistantAvatar(size: 34),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: align,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: Radius.circular(isUser ? 16 : 4),
+                      bottomRight: Radius.circular(isUser ? 4 : 16),
+                    ),
+                  ),
+                  child: message.isLoading
+                      ? _TypingDots(color: textColor)
+                      : Text(
+                          message.text,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: textColor,
+                            height: 1.25,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _formatTime(message.createdAt),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+}
+
+class _TypingDots extends StatefulWidget {
+  final Color color;
+  const _TypingDots({required this.color});
+
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+        ..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) {
+        final v = _c.value;
+        final a = (v * 3).floor() % 3;
+        final dots = '.' * (a + 1);
+        return Text('Réflexion$dots',
+            style: TextStyle(color: widget.color, fontWeight: FontWeight.w600));
+      },
     );
   }
 }

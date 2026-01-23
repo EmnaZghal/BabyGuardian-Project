@@ -8,7 +8,7 @@ class OverallStatusCard extends StatelessWidget {
   const OverallStatusCard({
     super.key,
     required this.title,
-    required this.subtitle,
+    required this.subtitle, double? overallScore, required String statusText,
   });
 
   @override

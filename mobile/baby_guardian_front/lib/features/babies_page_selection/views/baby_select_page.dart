@@ -1,24 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-class BabySelectPage extends StatelessWidget {
+import '../../auth/service/auth_service.dart';
+import '../models/baby_model.dart';
+import '../services/baby_list_api.dart';
+
+class BabySelectPage extends StatefulWidget {
   const BabySelectPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final babies = [
-      _Baby(
-        name: 'Emma',
-        age: '3 months',
-        iconPath: 'assets/images/girl_icon.png',
-      ),
-      _Baby(
-        name: 'Lucas',
-        age: '6 months',
-        iconPath: 'assets/images/boy_icon.png',
-      ),
-    ];
+  State<BabySelectPage> createState() => _BabySelectPageState();
+}
 
+class _BabySelectPageState extends State<BabySelectPage> {
+  final _auth = AuthService();
+
+  bool _loading = true;
+  String? _error;
+  List<BabyModel> _babies = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBabies();
+  }
+
+  Future<void> _loadBabies() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final data = await BabyListApi.getMyBabies(auth: _auth);
+
+      final list = data.map((e) {
+        final m = Map<String, dynamic>.from(e);
+
+        final gender = _asGender(m['gender'] ?? m['sex'] ?? 1);
+
+        final firstName = (m['firstName'] ??
+                m['firstname'] ??
+                m['first_name'] ??
+                m['babyFirstName'] ??
+                m['name'] ??
+                m['fullName'] ??
+                'Baby')
+            .toString();
+
+        return BabyModel(
+          id: _asInt(m['id'] ?? m['babyId'] ?? 0),
+          name: firstName,
+          gender: gender,
+          ageLabel: (m['ageLabel'] ?? m['age'] ?? '').toString(),
+        );
+      }).toList();
+
+      setState(() => _babies = list);
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+
+  static int _asInt(dynamic v) {
+    if (v is int) return v;
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  static int _asGender(dynamic v) {
+    final n = _asInt(v);
+    return (n == 0) ? 0 : 1;
+  }
+
+  String _iconFromGender(int? gender) {
+    if (gender == 0) return 'assets/images/girl_icon.png';
+    return 'assets/images/boy_icon.png';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -44,33 +106,109 @@ class BabySelectPage extends StatelessWidget {
                   style: TextStyle(color: Color(0xFF6B7280), fontSize: 15),
                 ),
                 const SizedBox(height: 18),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: babies.length + 1,
-                    separatorBuilder: (_, __) => const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      if (index < babies.length) {
-                        final b = babies[index];
-                        return _BabyCard(
-                          baby: b,
-                          onTap: () => context.go('/home'),
-                        );
-                      }
 
-                      // ✅ Add baby card navigation
-                      return _AddBabyCard(
-                        onTap: () {
-                          // ✅ Navigate to create baby profile page
-                          context.go('/baby-create');
-                        },
-                      );
-                    },
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _loadBabies,
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : (_error != null)
+                            ? ListView(
+                                children: [
+                                  _ErrorBox(
+                                    message: _error!,
+                                    onRetry: _loadBabies,
+                                  ),
+                                ],
+                              )
+                            : (_babies.isEmpty)
+                                // ✅ EMPTY STATE
+                                ? ListView(
+                                    children: [
+                                      const SizedBox(height: 30),
+                                      const _EmptyState(),
+                                      const SizedBox(height: 18),
+                                      _AddBabyCard(
+                                        onTap: () => context.go('/baby-create'),
+                                      ),
+                                      const SizedBox(height: 12),
+                                    ],
+                                  )
+                                // ✅ NORMAL LIST
+                                : ListView.separated(
+                                    itemCount: _babies.length + 1,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 16),
+                                    itemBuilder: (context, index) {
+                                      if (index < _babies.length) {
+                                        final b = _babies[index];
+                                        return _BabyCard(
+                                          baby: _Baby(
+                                            name: b.name,
+                                            age: b.ageLabel,
+                                            iconPath: _iconFromGender(b.gender),
+                                          ),
+                                          onTap: () => context.go('/home'),
+                                        );
+                                      }
+
+                                      return _AddBabyCard(
+                                        onTap: () => context.go('/baby-create'),
+                                      );
+                                    },
+                                  ),
                   ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFFEFF6FF),
+            ),
+            child: const Icon(Icons.child_care, color: Color(0xFF60A5FA), size: 30),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No babies yet',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Create your first baby profile to start monitoring.',
+                  style: TextStyle(color: Color(0xFF6B7280)),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -92,10 +230,7 @@ class _BabyCard extends StatelessWidget {
   final _Baby baby;
   final VoidCallback onTap;
 
-  const _BabyCard({
-    required this.baby,
-    required this.onTap,
-  });
+  const _BabyCard({required this.baby, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -117,8 +252,6 @@ class _BabyCard extends StatelessWidget {
                 child: ClipOval(
                   child: Image.asset(
                     baby.iconPath,
-                    width: double.infinity,
-                    height: double.infinity,
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -134,10 +267,12 @@ class _BabyCard extends StatelessWidget {
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      baby.age,
+                      baby.age.isEmpty ? '—' : baby.age,
                       style: const TextStyle(color: Color(0xFF6B7280)),
                     ),
                   ],
@@ -158,7 +293,6 @@ class _BabyCard extends StatelessWidget {
 
 class _AddBabyCard extends StatelessWidget {
   final VoidCallback onTap;
-
   const _AddBabyCard({required this.onTap});
 
   @override
@@ -220,6 +354,44 @@ class _AddBabyCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ErrorBox extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorBox({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFE4E6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Color(0xFFB91C1C)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFF7F1D1D),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
+        ],
       ),
     );
   }

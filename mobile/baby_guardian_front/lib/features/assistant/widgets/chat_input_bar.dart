@@ -1,81 +1,77 @@
 import 'package:flutter/material.dart';
 
-class ChatInputBar extends StatelessWidget {
-  final TextEditingController controller;
-  final VoidCallback onSend;
+class ChatInputBar extends StatefulWidget {
+  final bool enabled;
+  final Future<void> Function(String text) onSend;
 
   const ChatInputBar({
     super.key,
-    required this.controller,
     required this.onSend,
+    this.enabled = true,
   });
 
   @override
+  State<ChatInputBar> createState() => _ChatInputBarState();
+}
+
+class _ChatInputBarState extends State<ChatInputBar> {
+  final TextEditingController _c = TextEditingController();
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSend() async {
+    final text = _c.text.trim();
+    if (text.isEmpty || !widget.enabled) return;
+
+    _c.clear();
+    _focus.requestFocus();
+    await widget.onSend(text);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Color(0xFFE5E7EB)),
-        ),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(top: BorderSide(color: theme.colorScheme.outlineVariant)),
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => onSend(),
-                decoration: InputDecoration(
-                  hintText: 'Ask a question...',
-                  hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
-                  filled: true,
-                  fillColor: const Color(0xFFF9FAFB),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFF93C5FD)),
-                  ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _c,
+              focusNode: _focus,
+              enabled: widget.enabled,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _handleSend(),
+              decoration: InputDecoration(
+                hintText: 'Écrire un message…',
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerHighest,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            InkWell(
-              onTap: onSend,
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: const LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [Color(0xFF60A5FA), Color(0xFF22D3EE)],
-                  ),
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 14,
-                      color: Color(0x14000000),
-                      offset: Offset(0, 8),
-                    )
-                  ],
-                ),
-                child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          IconButton.filled(
+            onPressed: widget.enabled ? _handleSend : null,
+            icon: const Icon(Icons.send_rounded),
+          ),
+        ],
       ),
     );
   }

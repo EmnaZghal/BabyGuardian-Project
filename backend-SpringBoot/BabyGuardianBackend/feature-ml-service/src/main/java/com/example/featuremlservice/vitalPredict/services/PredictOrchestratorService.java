@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,9 +28,10 @@ public class PredictOrchestratorService {
     public Map<String, Object> predictFromDbHour(PredictFromDbRequest req) {
 
         Instant ts = req.hourTs(); // instant choisi par user
+        LocalDateTime tsLdt = LocalDateTime.ofInstant(ts, ZoneOffset.UTC);
 
         // 60 lignes avant ts
-        List<SensorReadingEntity> rows = repo.findLast60Before(req.deviceId(), ts);
+        List<SensorReadingEntity> rows = repo.findLast60Before(req.deviceId(), tsLdt);
 
         if (rows.size() < 10) { // seuil minimal (à ajuster)
             throw new ResponseStatusException(

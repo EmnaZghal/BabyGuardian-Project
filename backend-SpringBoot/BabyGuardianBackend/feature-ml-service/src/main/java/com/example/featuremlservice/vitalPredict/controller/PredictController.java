@@ -1,10 +1,10 @@
 package com.example.featuremlservice.vitalPredict.controller;
 
-
 import com.example.featuremlservice.vitalPredict.dto.PredictFromDbRequest;
 import com.example.featuremlservice.vitalPredict.services.MlClientService;
 import com.example.featuremlservice.vitalPredict.services.PredictOrchestratorService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,6 +13,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
+@Slf4j
 public class PredictController {
 
     private final PredictOrchestratorService orchestrator;
@@ -23,10 +24,23 @@ public class PredictController {
         try {
             Map<String, Object> res = orchestrator.predictFromDbHour(req);
             return ResponseEntity.ok(res);
+
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("ok", false, "error", e.getMessage()));
+            log.warn("predictHourly bad request: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "ok", false,
+                    "error", e.getMessage()
+            ));
+
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(Map.of("ok", false, "error", "server_error"));
+            // ✅ ICI: la vraie cause du 500
+            log.error("predictHourly server error. req={}", req, e);
+
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "ok", false,
+                    "error", "server_error",
+                    "details", e.getMessage()
+            ));
         }
     }
 
@@ -35,5 +49,4 @@ public class PredictController {
         boolean ok = mlClient.healthCheck();
         return Map.of("ok", ok);
     }
-
 }

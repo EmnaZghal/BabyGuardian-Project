@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:baby_guardian_front/shared/widgets/section_title.dart';
-import 'package:baby_guardian_front/shared/widgets/disclaimer_card.dart';
 
 import '../models/chat_message.dart';
+import '../services/assistant_service.dart';
 import '../widgets/assistant_avatar.dart';
 import '../widgets/assistant_quick_action_tile.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/chat_input_bar.dart';
+import '../../../cores/constants/env.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({super.key});
@@ -16,211 +16,239 @@ class AssistantPage extends StatefulWidget {
 }
 
 class _AssistantPageState extends State<AssistantPage> {
-  final _controller = TextEditingController();
-  final _scroll = ScrollController();
+  late final AssistantService _service;
 
-  final List<ChatMessage> _messages = [
-    const ChatMessage(
-      id: 1,
-      type: MessageType.assistant,
-      content: "Hi! I'm your BabyGuardian assistant. How can I help you today?",
+  final List<ChatMessage> _messages = [];
+  final ScrollController _scroll = ScrollController();
+
+  String _babyId = 'b123'; // tu peux le rendre dynamique
+  bool _sending = false;
+
+  final quickActions = const [
+    AssistantQuickAction(
+      title: 'SpO2',
+      subtitle: 'Définition et valeurs normales',
+      intent: 'DEFINE_SPO2',
+      message: 'Que signifie SpO2 ?',
+      icon: Icons.monitor_heart_outlined,
+    ),
+    AssistantQuickAction(
+      title: 'Température',
+      subtitle: 'Fièvre, seuils, conseils',
+      intent: 'DEFINE_TEMPERATURE',
+      message: 'Quelle est la température normale pour un bébé ?',
+      icon: Icons.thermostat_outlined,
+    ),
+    AssistantQuickAction(
+      title: 'Fréquence cardiaque',
+      subtitle: 'Valeurs normales',
+      intent: 'DEFINE_HEART_RATE',
+      message: 'Quelle est la fréquence cardiaque normale pour un bébé ?',
+      icon: Icons.favorite_border,
+    ),
+    AssistantQuickAction(
+      title: 'Alerte',
+      subtitle: 'Que faire en cas d’alerte ?',
+      intent: 'ALERT_GUIDE',
+      message: 'Que dois-je faire si je reçois une alerte ?',
+      icon: Icons.warning_amber_rounded,
     ),
   ];
 
   @override
+  void initState() {
+    super.initState();
+
+    // ✅ Utilise Env.gatewayBaseUrl (cloudflare / ip)
+    _service = AssistantService(baseUrl: Env.gatewayBaseUrl);
+
+    _messages.add(ChatMessage(
+      id: 'welcome',
+      role: ChatRole.assistant,
+      text:
+          "Bonjour 👋 Je suis l’assistant BabyGuardian.\n"
+          "Pose-moi une question (SpO2, température, alertes…) ou utilise les actions rapides.",
+      createdAt: DateTime.now(),
+    ));
+  }
+
+  @override
   void dispose() {
-    _controller.dispose();
+    _service.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _send({
+    required String text,
+    String? intent,
+  }) async {
+    final msg = text.trim();
+    if (msg.isEmpty || _sending) return;
+
+    setState(() {
+      _sending = true;
+      _messages.add(ChatMessage(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        role: ChatRole.user,
+        text: msg,
+        createdAt: DateTime.now(),
+      ));
+      _messages.add(ChatMessage(
+        id: 'loading',
+        role: ChatRole.assistant,
+        text: '…',
+        createdAt: DateTime.now(),
+        isLoading: true,
+      ));
+    });
+
+    _scrollToBottom();
+
+    try {
+      final reply = await _service.sendMessage(
+        message: msg,
+        babyId: _babyId,
+        intent: intent,
+      );
+
+      setState(() {
+        _messages.removeWhere((m) => m.id == 'loading' && m.isLoading);
+        _messages.add(ChatMessage(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          role: ChatRole.assistant,
+          text: reply.isEmpty ? "Je n’ai pas reçu de réponse." : reply,
+          createdAt: DateTime.now(),
+        ));
+      });
+    } catch (e) {
+      setState(() {
+        _messages.removeWhere((m) => m.id == 'loading' && m.isLoading);
+        _messages.add(ChatMessage(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          role: ChatRole.assistant,
+          text: "Erreur: $e",
+          createdAt: DateTime.now(),
+        ));
+      });
+    } finally {
+      setState(() => _sending = false);
+      _scrollToBottom();
+    }
   }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
       _scroll.animateTo(
-        _scroll.position.maxScrollExtent + 120,
+        _scroll.position.maxScrollExtent,
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
       );
     });
   }
 
-  void _send([String? text]) {
-    final raw = (text ?? _controller.text).trim();
-    if (raw.isEmpty) return;
-
-    final nextId = _messages.isEmpty ? 1 : _messages.last.id + 1;
-
-    setState(() {
-      _messages.add(ChatMessage(id: nextId, type: MessageType.user, content: raw));
-      _messages.add(ChatMessage(
-        id: nextId + 1,
-        type: MessageType.assistant,
-        content:
-            "Thanks for your question. Emma's health status is currently normal. "
-            "All vital signs are within expected ranges for a 3-month-old baby.",
-      ));
-    });
-
-    _controller.clear();
-    _scrollToBottom();
-  }
-
   @override
   Widget build(BuildContext context) {
-    const textDark = Color(0xFF111827);
-    const textMuted = Color(0xFF6B7280);
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFEFF6FF), Colors.white],
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              // ===== Header =====
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 14,
-                      color: Color(0x14000000),
-                      offset: Offset(0, 6),
-                    )
-                  ],
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.smart_toy_outlined, color: Color(0xFF111827)),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Assistant',
-                            style: TextStyle(
-                              color: textDark,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'RAG chatbot — support & tips',
-                            style: TextStyle(
-                              color: textMuted,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ===== Content (scrollable) =====
-              Expanded(
-                child: ListView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                  children: [
-                    // Quick actions
-                    const SectionTitle('Quick questions'),
-                    const SizedBox(height: 10),
-
-                    AssistantQuickActionTile(
-                      icon: Icons.info_outline,
-                      label: 'Explain the last alert',
-                      bgColor: const Color(0xFFEFF6FF),
-                      borderColor: const Color(0xFFDBEAFE),
-                      iconBgColor: const Color(0xFFDBEAFE),
-                      iconColor: const Color(0xFF3B82F6),
-                      onTap: () => _send('Explain the last alert'),
-                    ),
-                    const SizedBox(height: 10),
-
-                    AssistantQuickActionTile(
-                      icon: Icons.trending_up,
-                      label: "What's the current health status?",
-                      bgColor: const Color(0xFFECFDF5),
-                      borderColor: const Color(0xFFBBF7D0),
-                      iconBgColor: const Color(0xFFDCFCE7),
-                      iconColor: const Color(0xFF16A34A),
-                      onTap: () => _send("What's the current health status?"),
-                    ),
-                    const SizedBox(height: 10),
-
-                    AssistantQuickActionTile(
-                      icon: Icons.monitor_heart_outlined,
-                      label: 'What does SpO₂ mean?',
-                      bgColor: const Color(0xFFECFEFF),
-                      borderColor: const Color(0xFFCFFAFE),
-                      iconBgColor: const Color(0xFFCFFAFE),
-                      iconColor: const Color(0xFF0891B2),
-                      onTap: () => _send('What does SpO₂ mean?'),
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    // Messages
-                    ..._messages.map(_buildMessageRow).toList(),
-
-                    const SizedBox(height: 18),
-
-                    // Disclaimer (shared widget)
-                    const DisclaimerCard(
-                      title: 'Warning',
-                      message:
-                          'This assistant provides general information. If you have concerns about your baby’s health, please consult a healthcare professional.',
-                    ),
-
-                    const SizedBox(height: 90), // espace pour l'input
-                  ],
-                ),
-              ),
-
-              // ===== Input bar =====
-              ChatInputBar(
-                controller: _controller,
-                onSend: _send,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ✅ FIX OVERFLOW ICI : Avatar + bubble => Flexible + Align + maxWidth %
-  Widget _buildMessageRow(ChatMessage m) {
-    final isUser = m.type == MessageType.user;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            const AssistantAvatar(),
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: Row(
+          children: [
             const SizedBox(width: 8),
+            const AssistantAvatar(size: 34),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Assistant',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  'BabyGuardian',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Changer babyId',
+            icon: const Icon(Icons.badge_outlined),
+            onPressed: () async {
+              final controller = TextEditingController(text: _babyId);
+              final newId = await showDialog<String>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Baby ID'),
+                  content: TextField(
+                    controller: controller,
+                    decoration: const InputDecoration(
+                      hintText: 'ex: b123',
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Annuler'),
+                    ),
+                    FilledButton(
+                      onPressed: () =>
+                          Navigator.pop(ctx, controller.text.trim()),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
 
-          Flexible(
-            child: Align(
-              alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-              child: ChatBubble(message: m),
+              if (newId != null && newId.isNotEmpty) {
+                setState(() => _babyId = newId);
+              }
+            },
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: Column(
+        children: [
+          SizedBox(
+            height: 108,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              scrollDirection: Axis.horizontal,
+              itemCount: quickActions.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final a = quickActions[i];
+                return AssistantQuickActionTile(
+                  action: a,
+                  onTap: () => _send(text: a.message, intent: a.intent),
+                );
+              },
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.builder(
+              controller: _scroll,
+              padding: const EdgeInsets.all(12),
+              itemCount: _messages.length,
+              itemBuilder: (_, i) => ChatBubble(message: _messages[i]),
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: ChatInputBar(
+              enabled: !_sending,
+              onSend: (text) => _send(text: text),
             ),
           ),
         ],
