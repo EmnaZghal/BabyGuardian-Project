@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:baby_guardian_front/features/auth/views/login_page.dart';
 import 'package:baby_guardian_front/features/auth/views/sign_up_page.dart';
 import 'package:baby_guardian_front/features/babies_page_selection/views/baby_select_page.dart';
+import 'package:baby_guardian_front/features/babies_page_selection/views/baby_create_page.dart';
+import 'package:baby_guardian_front/features/babies_page_selection/views/add_baby_form.dart';
 
 import 'package:baby_guardian_front/features/shell/main_shell_page.dart';
 import 'package:baby_guardian_front/features/home/views/home_page.dart';
@@ -35,7 +37,10 @@ class AppRouter {
         builder: (context, state) => const SignUpPage(),
       ),
 
-
+      GoRoute(
+        path: '/add-baby',
+        builder: (context, state) => const AddBabyFormPage(),
+      ),
       GoRoute(
         path: '/select-baby',
         parentNavigatorKey: _rootKey,
@@ -48,6 +53,10 @@ class AppRouter {
       GoRoute(
         path: '/predictions',
         builder: (context, state) => const PredictionsPage(),
+      ),
+      GoRoute(
+        path: '/baby-create',
+        builder: (context, state) => const BabyCreatePage(),
       ),
 
       ShellRoute(

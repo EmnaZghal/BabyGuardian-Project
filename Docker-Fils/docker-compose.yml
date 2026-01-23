@@ -1,5 +1,3 @@
-
-
 services:
   auth_db:
     image: postgres:17.5-alpine3.21
@@ -78,6 +76,11 @@ services:
       KC_DB_PASSWORD: 1234
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_PROXY: edge
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_URL: "https://beverage-quantum-those-levitra.trycloudflare.com"
+      
     ports:
       - "8080:8080"
     depends_on:
