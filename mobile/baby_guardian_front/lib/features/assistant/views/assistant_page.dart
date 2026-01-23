@@ -217,7 +217,6 @@ class _AssistantPageState extends State<AssistantPage> {
             const SizedBox(width: 8),
           ],
 
-          // ✅ IMPORTANT : empêche RenderFlex overflow
           Flexible(
             child: Align(
               alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,

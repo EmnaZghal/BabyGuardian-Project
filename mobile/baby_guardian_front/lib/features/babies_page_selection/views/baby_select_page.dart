@@ -56,9 +56,12 @@ class BabySelectPage extends StatelessWidget {
                           onTap: () => context.go('/home'),
                         );
                       }
+
+                      // ✅ Add baby card navigation
                       return _AddBabyCard(
                         onTap: () {
-                          // TODO: navigate to "Add baby" / pairing screen
+                          // ✅ Navigate to create baby profile page
+                          context.go('/baby-create');
                         },
                       );
                     },
