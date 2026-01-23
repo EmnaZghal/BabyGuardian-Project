@@ -32,7 +32,10 @@ public class MqttConfig {
         MqttConnectOptions opts = new MqttConnectOptions();
         opts.setServerURIs(new String[]{brokerUri});
         opts.setCleanSession(cleanSession);
-        opts.setAutomaticReconnect(true);  // gère la reconnexion
+
+        // ❌ IMPORTANT : désactiver
+        opts.setAutomaticReconnect(false);
+
         opts.setConnectionTimeout(10);
         opts.setKeepAliveInterval(30);
         return opts;

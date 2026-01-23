@@ -4,7 +4,7 @@
 class KeycloakConst {
   /// Hôte (ton tunnel Cloudflare vers Keycloak)
   static const String host =
-      'seas-trend-agent-higher.trycloudflare.com';
+      'therapist-mile-exciting-declaration.trycloudflare.com';
 
   /// Realm
   static const String realm = 'babyGuardian-realm';
