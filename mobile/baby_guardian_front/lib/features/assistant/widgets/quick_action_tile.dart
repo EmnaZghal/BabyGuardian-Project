@@ -1,59 +1,69 @@
 import 'package:flutter/material.dart';
 
 class QuickActionTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
   final IconData icon;
-  final String label;
-
-  final Color bg;
-  final Color border;
-  final Color iconBg;
-  final Color iconColor;
-
   final VoidCallback onTap;
 
   const QuickActionTile({
     super.key,
+    required this.title,
+    required this.subtitle,
     required this.icon,
-    required this.label,
-    required this.bg,
-    required this.border,
-    required this.iconBg,
-    required this.iconColor,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(12),
+      borderRadius: BorderRadius.circular(16),
+      child: Ink(
+        width: 260,
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: border),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+          color: theme.colorScheme.surface,
         ),
         child: Row(
           children: [
             Container(
-              width: 34,
-              height: 34,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: iconBg,
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(14),
+                color: theme.colorScheme.primary.withOpacity(0.12),
               ),
-              child: Icon(icon, color: iconColor, size: 18),
+              child: Icon(icon, color: theme.colorScheme.primary),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
           ],
