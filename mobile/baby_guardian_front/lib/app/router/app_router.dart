@@ -99,10 +99,15 @@ class AppRouter {
         builder: (context, state, child) => MainShellPage(child: child),
         routes: [
           GoRoute(
-            path: '/home',
-            parentNavigatorKey: _shellKey,
-            builder: (context, state) => const HomePage(),
-          ),
+  path: '/home',
+  parentNavigatorKey: _shellKey,
+  builder: (context, state) {
+    final deviceId = state.uri.queryParameters['deviceId'] ?? '';
+    final babyName = Uri.decodeComponent(state.uri.queryParameters['babyName'] ?? 'Baby');
+    return HomePage(deviceId: deviceId, babyName: babyName);
+  },
+),
+
           GoRoute(
             path: '/baby-settings',
             parentNavigatorKey: _shellKey,
