@@ -32,16 +32,13 @@ class _BabySelectPageState extends State<BabySelectPage> {
     });
 
     try {
-      // ✅ await داخل function async فقط
       final data = await BabyListApi.getMyBabies(auth: _auth);
 
-      // ✅ تحويل JSON -> BabyModel
       final list = data.map((e) {
         final m = Map<String, dynamic>.from(e);
 
         final gender = _asGender(m['gender'] ?? m['sex'] ?? 1);
 
-        // ✅ عرض firstName بدل "Baby"
         final firstName = (m['firstName'] ??
                 m['firstname'] ??
                 m['first_name'] ??
@@ -109,6 +106,7 @@ class _BabySelectPageState extends State<BabySelectPage> {
                   style: TextStyle(color: Color(0xFF6B7280), fontSize: 15),
                 ),
                 const SizedBox(height: 18),
+
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: _loadBabies,
@@ -123,37 +121,94 @@ class _BabySelectPageState extends State<BabySelectPage> {
                                   ),
                                 ],
                               )
-                            : ListView.separated(
-                                itemCount: _babies.length + 1,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 16),
-                                itemBuilder: (context, index) {
-                                  if (index < _babies.length) {
-                                    final b = _babies[index];
-                                    return _BabyCard(
-                                      baby: _Baby(
-                                        name: b.name, // ✅ firstName هنا
-                                        age: b.ageLabel,
-                                        iconPath: _iconFromGender(b.gender),
+                            : (_babies.isEmpty)
+                                // ✅ EMPTY STATE
+                                ? ListView(
+                                    children: [
+                                      const SizedBox(height: 30),
+                                      const _EmptyState(),
+                                      const SizedBox(height: 18),
+                                      _AddBabyCard(
+                                        onTap: () => context.go('/baby-create'),
                                       ),
-                                      onTap: () {
-                                        // هنا تنجم تخزن b.id في provider/secure storage إذا تحب
-                                        context.go('/home');
-                                      },
-                                    );
-                                  }
+                                      const SizedBox(height: 12),
+                                    ],
+                                  )
+                                // ✅ NORMAL LIST
+                                : ListView.separated(
+                                    itemCount: _babies.length + 1,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(height: 16),
+                                    itemBuilder: (context, index) {
+                                      if (index < _babies.length) {
+                                        final b = _babies[index];
+                                        return _BabyCard(
+                                          baby: _Baby(
+                                            name: b.name,
+                                            age: b.ageLabel,
+                                            iconPath: _iconFromGender(b.gender),
+                                          ),
+                                          onTap: () => context.go('/home'),
+                                        );
+                                      }
 
-                                  return _AddBabyCard(
-                                    onTap: () => context.go('/baby-create'),
-                                  );
-                                },
-                              ),
+                                      return _AddBabyCard(
+                                        onTap: () => context.go('/baby-create'),
+                                      );
+                                    },
+                                  ),
                   ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color(0xFFEFF6FF),
+            ),
+            child: const Icon(Icons.child_care, color: Color(0xFF60A5FA), size: 30),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No babies yet',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Create your first baby profile to start monitoring.',
+                  style: TextStyle(color: Color(0xFF6B7280)),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
