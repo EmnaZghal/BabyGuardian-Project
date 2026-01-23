@@ -14,11 +14,7 @@ class HomePage extends StatelessWidget {
   final String deviceId;
   final String babyName;
 
-  const HomePage({
-    super.key,
-    required this.deviceId,
-    required this.babyName,
-  });
+  const HomePage({super.key, required this.deviceId, required this.babyName});
 
   void _showSnack(BuildContext context, String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -38,11 +34,7 @@ class HomePage extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFEFF6FF),
-                Color(0xFFECFEFF),
-                Color(0xFFF5F3FF),
-              ],
+              colors: [Color(0xFFEFF6FF), Color(0xFFECFEFF), Color(0xFFF5F3FF)],
             ),
           ),
           child: Column(
@@ -55,10 +47,16 @@ class HomePage extends StatelessWidget {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.only(bottom: 120),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
                     child: Column(
                       children: [
-                        const SectionHeader(title: "Vital signs", trailingLive: true),
+                        const SectionHeader(
+                          title: "Vital signs",
+                          trailingLive: true,
+                        ),
                         const SizedBox(height: 10),
 
                         VitalCard(
@@ -80,7 +78,8 @@ class HomePage extends StatelessWidget {
                               colors: [Color(0xFFEA580C), Color(0xFFFB923C)],
                             ),
                           ),
-                          onTap: () => _showSnack(context, "Temperature details (demo)"),
+                          onTap: () =>
+                              _showSnack(context, "Temperature details (demo)"),
                         ),
 
                         const SizedBox(height: 12),
@@ -103,7 +102,8 @@ class HomePage extends StatelessWidget {
                               colors: [Color(0xFF0891B2), Color(0xFF22D3EE)],
                             ),
                           ),
-                          onTap: () => _showSnack(context, "SpO2 details (demo)"),
+                          onTap: () =>
+                              _showSnack(context, "SpO2 details (demo)"),
                         ),
 
                         const SizedBox(height: 12),
@@ -128,7 +128,8 @@ class HomePage extends StatelessWidget {
                               colors: [Color(0xFFDB2777), Color(0xFFF472B6)],
                             ),
                           ),
-                          onTap: () => _showSnack(context, "Heart rate details (demo)"),
+                          onTap: () =>
+                              _showSnack(context, "Heart rate details (demo)"),
                         ),
 
                         const SizedBox(height: 12),
@@ -140,14 +141,16 @@ class HomePage extends StatelessWidget {
                           gradient: const LinearGradient(
                             colors: [Color(0xFF60A5FA), Color(0xFF2563EB)],
                           ),
-                          onTap: () => _showSnack(context, "Humidity details (demo)"),
+                          onTap: () =>
+                              _showSnack(context, "Humidity details (demo)"),
                         ),
 
                         const SizedBox(height: 22),
                         const SectionHeader(title: "Wristband status"),
                         const SizedBox(height: 10),
                         DeviceStatusCard(
-                          onTap: () => _showSnack(context, "Wristband details (demo)"),
+                          onTap: () =>
+                              _showSnack(context, "Wristband details (demo)"),
                         ),
 
                         const SizedBox(height: 22),
@@ -161,7 +164,7 @@ class HomePage extends StatelessWidget {
                           gradient: const LinearGradient(
                             colors: [Color(0xFF10B981), Color(0xFF0D9488)],
                           ),
-                          onTap: () => context.go('/health-status'),
+                          onTap: () => context.push('/health-status'),
                         ),
                         const SizedBox(height: 12),
 
@@ -172,7 +175,7 @@ class HomePage extends StatelessWidget {
                           gradient: const LinearGradient(
                             colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
                           ),
-                          onTap: () => context.go('/predictions'),
+                          onTap: () => context.push('/predictions'),
                         ),
                       ],
                     ),

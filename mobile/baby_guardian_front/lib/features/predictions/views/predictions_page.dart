@@ -139,10 +139,14 @@ class _PredictionsPageState extends State<PredictionsPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new),
           onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Retour vers Home...')),
-            );
-            context.go('/home');
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Retour...')));
+            if (GoRouter.of(context).canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
           },
           tooltip: 'Back',
         ),
