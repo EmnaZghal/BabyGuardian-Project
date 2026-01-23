@@ -3,14 +3,17 @@ package com.example.featuremlservice.healthScore.services;
 
 import com.example.featuremlservice.healthScore.dto.HourlyHealthScoreRequest;
 import com.example.featuremlservice.healthScore.dto.HourlyHealthScoreResponse;
+import com.example.featuremlservice.healthScore.dto.RiskPredictRequest;
 import com.example.featuremlservice.healthScore.dto.RiskPredictResponse;
 import com.example.featuremlservice.healthScore.util.StatsUtil;
 import com.example.featuremlservice.vitalPredict.entity.SensorReadingEntity;
 import com.example.featuremlservice.vitalPredict.repository.SensorReadingRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
@@ -23,14 +26,14 @@ public class HourlyHealthScoreService {
     private final RiskScoreClientService riskClient;
 
     public HourlyHealthScoreResponse computeHourly(HourlyHealthScoreRequest req) {
-        Instant to = req.hourEnd();
-        Instant from = to.minus(1, ChronoUnit.HOURS);
+         LocalDateTime to = req.hourEnd();
 
         // ⚠️ utilise ta méthode dérivée correcte ici:
-        List<SensorReadingEntity> readings =
-                sensorRepo.findByDeviceIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtDesc(
-                        req.deviceId(), from, to
-                );
+        List<SensorReadingEntity> readings =sensorRepo.findByDeviceIdAndCreatedAtLessThanOrderByCreatedAtDesc(
+                req.deviceId(),
+                to,
+                PageRequest.of(0, 30)
+        );
 
         if (readings.isEmpty()) {
             return new HourlyHealthScoreResponse(
@@ -41,8 +44,8 @@ public class HourlyHealthScoreService {
         }
 
         var temps = readings.stream().map(SensorReadingEntity::getTemp).toList();
-        var hrs   = readings.stream().map(SensorReadingEntity::getHeartRate).toList();
-        var spo2s = readings.stream().map(SensorReadingEntity::getSpo2).toList();
+        var hrs = readings.stream().map(SensorReadingEntity::getHeartRate).map(Integer::doubleValue)  .toList();
+        var spo2s = readings.stream().map(SensorReadingEntity::getSpo2).map(Integer::doubleValue)  .toList();
 
         double tempMedian = StatsUtil.median(temps);
         double hrMedian   = StatsUtil.median(hrs);
@@ -53,14 +56,15 @@ public class HourlyHealthScoreService {
         double validRate = Math.min(1.0, readings.size() / expected);
 
         // payload modèle inchangé
-        var payload = new HashMap<String, Object>();
-        payload.put("gestational_age_weeks", req.gestationalAgeWeeks());
-        payload.put("gender", req.gender());
-        payload.put("age_days", req.ageDays());
-        payload.put("weight_kg", req.weightKg());
-        payload.put("temperature_c", tempMedian);
-        payload.put("heart_rate_bpm", hrMedian);
-        payload.put("oxygen_saturation", spo2P05);
+        RiskPredictRequest payload = new RiskPredictRequest(
+                req.gestationalAgeWeeks(),
+                req.gender(),
+                req.ageDays(),
+                req.weightKg(),
+                tempMedian,
+                hrMedian,
+                spo2P05
+        );
 
         RiskPredictResponse pred = riskClient.predict(payload);
 
