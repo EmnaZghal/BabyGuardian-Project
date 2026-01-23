@@ -3,8 +3,6 @@ import 'package:go_router/go_router.dart';
 
 import '../models/baby_create_request.dart';
 import '../services/baby_api.dart';
-
-// Ajuste si ton AuthService est ailleurs
 import 'package:baby_guardian_front/features/auth/service/auth_service.dart';
 
 class AddBabyFormPage extends StatefulWidget {
@@ -24,7 +22,6 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
   DateTime? _birthDate;
 
   bool _loading = false;
-
   final _auth = AuthService();
 
   @override
@@ -34,15 +31,12 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
     super.dispose();
   }
 
-  // yyyy-MM-dd
   String _fmtDate(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
     final dd = d.day.toString().padLeft(2, '0');
     return '${d.year}-$mm-$dd';
   }
 
-  /// Tu as demandé: gestationalAgeWeeks calculé depuis birthDate.
-  /// (Techniquement c'est plutôt "ageWeeks", mais on respecte ton modèle.)
   double _calcWeeksFromBirthDate(DateTime birth) {
     final days = DateTime.now().difference(birth).inDays;
     final weeks = days / 7.0;
@@ -66,55 +60,8 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
     setState(() => _birthDate = picked);
   }
 
-  String _buildErrorDetails(Object e) {
-    // Compatible avec ton ancien ApiException (message seulement)
-    // et la version “debug” (statusCode/endpoint/rawBody/debugString).
-    try {
-      final d = e as dynamic;
-
-      // Si tu as debugString()
-      try {
-        final s = d.debugString();
-        if (s is String) return s;
-      } catch (_) {}
-
-      final code = d.statusCode?.toString() ?? '-';
-      final msg = d.message?.toString() ?? e.toString();
-      final endpoint = d.endpoint?.toString() ?? '(unknown endpoint)';
-      final rawBody = d.rawBody?.toString() ?? '(no raw body)';
-
-      return 'HTTP $code\nENDPOINT: $endpoint\n\nMESSAGE:\n$msg\n\nRAW BODY:\n$rawBody';
-    } catch (_) {
-      return e.toString();
-    }
-  }
-
-  void _showError(Object e) {
-    final details = _buildErrorDetails(e);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(e.toString()),
-        action: SnackBarAction(
-          label: 'Details',
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: const Text('Add baby failed'),
-                content: SingleChildScrollView(child: Text(details)),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Future<void> _submit() async {
@@ -123,17 +70,15 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_birthDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a birth date')),
-      );
+      _toast('Please select a birth date');
       return;
     }
 
-    final weight = double.tryParse(_weightCtrl.text.trim().replaceAll(',', '.'));
+    final weight = double.tryParse(
+      _weightCtrl.text.trim().replaceAll(',', '.'),
+    );
     if (weight == null || weight <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Weight must be a valid number')),
-      );
+      _toast('Weight must be a valid number');
       return;
     }
 
@@ -152,29 +97,122 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
       final res = await BabyApi.createBaby(auth: _auth, body: req);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Baby added ✅ (id: ${res.babyId})')),
-      );
+      _toast('Baby created');
 
-      context.go('/select-baby');
+      // ✅ CHANGÉ: Utilise simple binding au lieu de BLE
+      context.go(
+        '/bind-device/${res.babyId}',
+        extra: {'babyName': _firstNameCtrl.text.trim()},
+      );
     } catch (e) {
       if (!mounted) return;
-      _showError(e);
+      _toast('Add baby failed: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  InputDecoration _dec(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFEC4899), width: 1.2),
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 16,
+            offset: Offset(0, 10),
+            color: Color(0x0F000000),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _genderChip({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFFEC4899)
+                  : const Color(0xFFE5E7EB),
+              width: selected ? 1.2 : 1.0,
+            ),
+            color: selected ? const Color(0xFFFFF1F7) : const Color(0xFFF8FAFC),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected
+                    ? const Color(0xFFEC4899)
+                    : const Color(0xFF64748B),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: selected
+                      ? const Color(0xFFEC4899)
+                      : const Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final weeks = (_birthDate == null) ? null : _calcWeeksFromBirthDate(_birthDate!);
+    final birthText = _birthDate == null
+        ? 'Select birth date'
+        : _fmtDate(_birthDate!);
 
     return Scaffold(
       appBar: AppBar(
+        elevation: 0,
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        elevation: 1,
-        shadowColor: const Color(0x14000000),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF111827)),
           onPressed: () => context.go('/baby-create'),
@@ -183,8 +221,7 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
           'Add new baby',
           style: TextStyle(
             color: Color(0xFF111827),
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
+            fontWeight: FontWeight.w900,
           ),
         ),
       ),
@@ -204,21 +241,7 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ===== Header Card (logo + subtitle) =====
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      boxShadow: const [
-                        BoxShadow(
-                          blurRadius: 16,
-                          color: Color(0x0F000000),
-                          offset: Offset(0, 10),
-                        )
-                      ],
-                    ),
+                  _card(
                     child: Row(
                       children: [
                         Container(
@@ -229,10 +252,7 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
                             gradient: LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFFFBCFE8), // pink-200
-                                Color(0xFFF9A8D4), // pink-300
-                              ],
+                              colors: [Color(0xFFFBCFE8), Color(0xFFF9A8D4)],
                             ),
                           ),
                           child: const Icon(
@@ -256,7 +276,7 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
                               ),
                               SizedBox(height: 4),
                               Text(
-                                'Fill the details to create a new baby profile.',
+                                'Create the profile then link the device.',
                                 style: TextStyle(
                                   color: Color(0xFF6B7280),
                                   fontWeight: FontWeight.w600,
@@ -269,37 +289,15 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 14),
 
-                  // ===== Form Card =====
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
+                  _card(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Baby name
                         TextFormField(
                           controller: _firstNameCtrl,
-                          decoration: InputDecoration(
-                            labelText: 'Baby name',
-                            prefixIcon: const Icon(Icons.badge_outlined),
-                            filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                            ),
-                          ),
+                          decoration: _dec('Baby name', Icons.badge_outlined),
                           validator: (v) {
                             final s = (v ?? '').trim();
                             if (s.isEmpty) return 'Baby name is required';
@@ -307,10 +305,8 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
                             return null;
                           },
                         ),
-
                         const SizedBox(height: 14),
 
-                        // Gender radio
                         const Text(
                           'Gender',
                           style: TextStyle(
@@ -319,69 +315,38 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
                             fontSize: 13,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: RadioListTile<int>(
-                                  value: 0,
-                                  groupValue: _gender,
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text(
-                                    'Girl',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
-                                  ),
-                                  onChanged: (v) => setState(() => _gender = v ?? 0),
-                                ),
-                              ),
-                              Expanded(
-                                child: RadioListTile<int>(
-                                  value: 1,
-                                  groupValue: _gender,
-                                  dense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  title: const Text(
-                                    'Boy',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
-                                  ),
-                                  onChanged: (v) => setState(() => _gender = v ?? 1),
-                                ),
-                              ),
-                            ],
-                          ),
+                        const SizedBox(height: 10),
+
+                        Row(
+                          children: [
+                            _genderChip(
+                              label: 'Girl',
+                              icon: Icons.female,
+                              selected: _gender == 0,
+                              onTap: () => setState(() => _gender = 0),
+                            ),
+                            const SizedBox(width: 12),
+                            _genderChip(
+                              label: 'Boy',
+                              icon: Icons.male,
+                              selected: _gender == 1,
+                              onTap: () => setState(() => _gender = 1),
+                            ),
+                          ],
                         ),
 
                         const SizedBox(height: 14),
 
-                        // Birth date picker
                         InkWell(
                           onTap: _pickBirthDate,
                           borderRadius: BorderRadius.circular(14),
                           child: InputDecorator(
-                            decoration: InputDecoration(
-                              labelText: 'Birth date',
-                              prefixIcon: const Icon(Icons.calendar_month),
-                              filled: true,
-                              fillColor: const Color(0xFFF8FAFC),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                              ),
+                            decoration: _dec(
+                              'Birth date',
+                              Icons.calendar_month,
                             ),
                             child: Text(
-                              _birthDate == null ? 'Select date' : _fmtDate(_birthDate!),
+                              birthText,
                               style: TextStyle(
                                 color: _birthDate == null
                                     ? const Color(0xFF6B7280)
@@ -392,59 +357,16 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
                           ),
                         ),
 
-                        const SizedBox(height: 12),
-
-                        // Computed weeks
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFDBEAFE)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'gestationalAgeWeeks (auto)',
-                                  style: TextStyle(
-                                    color: Color(0xFF1E40AF),
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                weeks == null ? '--' : weeks.toString(),
-                                style: const TextStyle(
-                                  color: Color(0xFF1D4ED8),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
                         const SizedBox(height: 14),
 
-                        // Weight
                         TextFormField(
                           controller: _weightCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(
-                            labelText: 'Weight (kg)',
-                            prefixIcon: const Icon(Icons.monitor_weight_outlined),
-                            filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                            ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: _dec(
+                            'Weight (kg)',
+                            Icons.monitor_weight_outlined,
                           ),
                           validator: (v) {
                             final s = (v ?? '').trim();
@@ -461,7 +383,6 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
 
                   const SizedBox(height: 16),
 
-                  // ===== Save button =====
                   ElevatedButton(
                     onPressed: _loading ? null : _submit,
                     style: ElevatedButton.styleFrom(
@@ -483,7 +404,7 @@ class _AddBabyFormPageState extends State<AddBabyFormPage> {
                             ),
                           )
                         : const Text(
-                            'Save baby',
+                            'Create baby & Link device',
                             style: TextStyle(fontWeight: FontWeight.w900),
                           ),
                   ),

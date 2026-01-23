@@ -1,10 +1,7 @@
 class BabyCreateRequest {
   final String firstName;
-
   final int gender;
-
-  final String birthDate;
-
+  final String birthDate; // yyyy-MM-dd
   final double gestationalAgeWeeks;
   final double weightKg;
 

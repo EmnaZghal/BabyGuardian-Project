@@ -3,9 +3,13 @@ import 'package:go_router/go_router.dart';
 
 import 'package:baby_guardian_front/features/auth/views/login_page.dart';
 import 'package:baby_guardian_front/features/auth/views/sign_up_page.dart';
+
 import 'package:baby_guardian_front/features/babies_page_selection/views/baby_select_page.dart';
 import 'package:baby_guardian_front/features/babies_page_selection/views/baby_create_page.dart';
 import 'package:baby_guardian_front/features/babies_page_selection/views/add_baby_form.dart';
+
+// ✅ NOUVEAU: Simple Device Binding (sans BLE)
+import 'package:baby_guardian_front/features/device_binding/views/simple_device_bind_page.dart';
 
 import 'package:baby_guardian_front/features/shell/main_shell_page.dart';
 import 'package:baby_guardian_front/features/home/views/home_page.dart';
@@ -26,6 +30,7 @@ class AppRouter {
     navigatorKey: _rootKey,
     initialLocation: '/login',
     routes: [
+      // ==================== AUTH ROUTES ====================
       GoRoute(
         path: '/login',
         parentNavigatorKey: _rootKey,
@@ -37,28 +42,58 @@ class AppRouter {
         builder: (context, state) => const SignUpPage(),
       ),
 
-      GoRoute(
-        path: '/add-baby',
-        builder: (context, state) => const AddBabyFormPage(),
-      ),
+      // ==================== BABY MANAGEMENT ====================
       GoRoute(
         path: '/select-baby',
         parentNavigatorKey: _rootKey,
         builder: (context, state) => const BabySelectPage(),
       ),
+
+      GoRoute(
+        path: '/baby-create',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const BabyCreatePage(),
+      ),
+
+      GoRoute(
+        path: '/add-baby',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const AddBabyFormPage(),
+      ),
+
+      // ✅ DEVICE BINDING (Simple, sans BLE)
+      GoRoute(
+        path: '/bind-device/:babyId',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) {
+          final babyId = state.pathParameters['babyId']!;
+
+          final extra = state.extra;
+          String? babyName;
+          if (extra is Map) {
+            babyName = extra['babyName']?.toString();
+          }
+
+          return SimpleDeviceBindPage(
+            babyId: babyId,
+            babyName: babyName,
+          );
+        },
+      ),
+
+      // ==================== HEALTH & PREDICTIONS ====================
       GoRoute(
         path: '/health-status',
+        parentNavigatorKey: _rootKey,
         builder: (context, state) => const HealthStatusPage(),
       ),
       GoRoute(
         path: '/predictions',
+        parentNavigatorKey: _rootKey,
         builder: (context, state) => const PredictionsPage(),
       ),
-      GoRoute(
-        path: '/baby-create',
-        builder: (context, state) => const BabyCreatePage(),
-      ),
 
+      // ==================== MAIN SHELL (Bottom Nav) ====================
       ShellRoute(
         navigatorKey: _shellKey,
         builder: (context, state, child) => MainShellPage(child: child),
