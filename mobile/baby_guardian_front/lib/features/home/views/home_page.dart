@@ -11,7 +11,10 @@ import '../widgets/device_status_card.dart';
 import '../widgets/quick_action_button.dart';
 
 class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+  final String deviceId;
+  final String babyName;
+
+  const HomePage({super.key, required this.deviceId, required this.babyName});
 
   void _showSnack(BuildContext context, String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -19,33 +22,27 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Demo data
     final temps = <double>[36, 37, 36.8, 37.1, 37.2, 37.0, 37.2, 37.1, 37.2];
     final spo2 = <double>[97, 98, 98, 97, 98, 98, 99, 98, 98];
     final hr = <double>[120, 122, 125, 123, 124, 126, 124, 123, 124];
 
     return Scaffold(
-      // ✅ No AppBar (top bar removed)
       body: SafeArea(
-        bottom: false, // bottom handled by your ShellRoute + BottomNav
+        bottom: false,
         child: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFEFF6FF), // blue-50
-                Color(0xFFECFEFF), // cyan-50
-                Color(0xFFF5F3FF), // purple-50
-              ],
+              colors: [Color(0xFFEFF6FF), Color(0xFFECFEFF), Color(0xFFF5F3FF)],
             ),
           ),
           child: Column(
             children: [
-              // ✅ FIXED HEADER (does not scroll)
-              DashboardHeader(babyName: "Emma", subtitle: "3 months and one"),
-
-              // ✅ Scrollable content only
+              DashboardHeader(
+                babyName: babyName.isEmpty ? "Baby" : babyName,
+                subtitle: "Device: $deviceId",
+              ),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.only(bottom: 120),
@@ -84,8 +81,8 @@ class HomePage extends StatelessWidget {
                           onTap: () =>
                               _showSnack(context, "Temperature details (demo)"),
                         ),
-                        const SizedBox(height: 12),
 
+                        const SizedBox(height: 12),
                         VitalCard(
                           title: "Oxygen saturation",
                           valueText: "98",
@@ -108,8 +105,8 @@ class HomePage extends StatelessWidget {
                           onTap: () =>
                               _showSnack(context, "SpO2 details (demo)"),
                         ),
-                        const SizedBox(height: 12),
 
+                        const SizedBox(height: 12),
                         VitalCard(
                           title: "Heart rate",
                           valueText: "124",
@@ -134,8 +131,8 @@ class HomePage extends StatelessWidget {
                           onTap: () =>
                               _showSnack(context, "Heart rate details (demo)"),
                         ),
-                        const SizedBox(height: 12),
 
+                        const SizedBox(height: 12),
                         SimpleInfoCard(
                           title: "Ambient humidity",
                           value: "56",
@@ -151,7 +148,6 @@ class HomePage extends StatelessWidget {
                         const SizedBox(height: 22),
                         const SectionHeader(title: "Wristband status"),
                         const SizedBox(height: 10),
-
                         DeviceStatusCard(
                           onTap: () =>
                               _showSnack(context, "Wristband details (demo)"),
@@ -168,8 +164,7 @@ class HomePage extends StatelessWidget {
                           gradient: const LinearGradient(
                             colors: [Color(0xFF10B981), Color(0xFF0D9488)],
                           ),
-                          onTap: () => context.go('/health-status'),
-
+                          onTap: () => context.push('/health-status'),
                         ),
                         const SizedBox(height: 12),
 
@@ -180,7 +175,7 @@ class HomePage extends StatelessWidget {
                           gradient: const LinearGradient(
                             colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
                           ),
-                          onTap: () => context.go('/predictions'),
+                          onTap: () => context.push('/predictions'),
                         ),
                       ],
                     ),

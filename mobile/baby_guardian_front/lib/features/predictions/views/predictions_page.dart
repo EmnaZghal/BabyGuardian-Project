@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../services/predictions_service.dart';
 import '../widgets/overall_status_card.dart';
@@ -73,15 +74,19 @@ class _PredictionsPageState extends State<PredictionsPage> {
         weightKg: int.parse(_weight.text.trim()),
       );
 
-      final overallScore = _toDouble(res['overallScore'] ?? res['score'] ?? res['riskScore']);
-      final status = (res['status'] ?? res['level'] ?? res['message'])?.toString();
+      final overallScore = _toDouble(
+        res['overallScore'] ?? res['score'] ?? res['riskScore'],
+      );
+      final status = (res['status'] ?? res['level'] ?? res['message'])
+          ?.toString();
 
       final risksJson = res['risks'] ?? res['items'] ?? res['details'];
       final risks = <RiskItem>[];
       if (risksJson is List) {
         for (final e in risksJson) {
           if (e is Map<String, dynamic>) risks.add(RiskItem.fromJson(e));
-          if (e is Map) risks.add(RiskItem.fromJson(Map<String, dynamic>.from(e)));
+          if (e is Map)
+            risks.add(RiskItem.fromJson(Map<String, dynamic>.from(e)));
         }
       }
 
@@ -130,7 +135,23 @@ class _PredictionsPageState extends State<PredictionsPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Predict Vitals')),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          onPressed: () {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Retour...')));
+            if (GoRouter.of(context).canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+          tooltip: 'Back',
+        ),
+        title: const Text('Predict Vitals'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
@@ -165,16 +186,17 @@ class _PredictionsPageState extends State<PredictionsPage> {
             const SizedBox(height: 12),
 
             // ✅ UI PRO : afficher seulement les valeurs prédictes
-            _PredictedVitalsCard(
-              temp: _predTemp,
-              spo2: _predSpo2,
-              hr: _predHr,
-            ),
+            _PredictedVitalsCard(temp: _predTemp, spo2: _predSpo2, hr: _predHr),
             const SizedBox(height: 12),
 
             // Si tu veux garder risks quand ils existent, sinon rien (pas de Raw JSON)
             if (_risks.isNotEmpty) ...[
-              Text('Risks', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+              Text(
+                'Risks',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 8),
               for (final r in _risks) ...[
                 RiskItemCard(item: r),
@@ -221,13 +243,18 @@ class _PredictedVitalsCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 18,
                   backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
-                  child: Icon(Icons.auto_graph_outlined, color: theme.colorScheme.primary),
+                  child: Icon(
+                    Icons.auto_graph_outlined,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Valeurs prédites (1h)',
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],
@@ -372,12 +399,12 @@ class _FormCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     InputDecoration deco(String label, IconData icon) => InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-          filled: true,
-          fillColor: theme.colorScheme.surface,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        );
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: theme.colorScheme.surface,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+    );
 
     return Card(
       elevation: 0,
@@ -386,7 +413,10 @@ class _FormCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            TextField(controller: deviceId, decoration: deco('deviceId', Icons.sensors_outlined)),
+            TextField(
+              controller: deviceId,
+              decoration: deco('deviceId', Icons.sensors_outlined),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: subjectId,
@@ -473,7 +503,10 @@ class _ErrorCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            Icon(Icons.error_outline, color: theme.colorScheme.onErrorContainer),
+            Icon(
+              Icons.error_outline,
+              color: theme.colorScheme.onErrorContainer,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

@@ -39,14 +39,15 @@ class _BabySelectPageState extends State<BabySelectPage> {
 
         final gender = _asGender(m['gender'] ?? m['sex'] ?? 1);
 
-        final firstName = (m['firstName'] ??
-                m['firstname'] ??
-                m['first_name'] ??
-                m['babyFirstName'] ??
-                m['name'] ??
-                m['fullName'] ??
-                'Baby')
-            .toString();
+        final firstName =
+            (m['firstName'] ??
+                    m['firstname'] ??
+                    m['first_name'] ??
+                    m['babyFirstName'] ??
+                    m['name'] ??
+                    m['fullName'] ??
+                    'Baby')
+                .toString();
 
         return BabyModel(
           id: _asInt(m['id'] ?? m['babyId'] ?? 0),
@@ -113,50 +114,49 @@ class _BabySelectPageState extends State<BabySelectPage> {
                     child: _loading
                         ? const Center(child: CircularProgressIndicator())
                         : (_error != null)
-                            ? ListView(
-                                children: [
-                                  _ErrorBox(
-                                    message: _error!,
-                                    onRetry: _loadBabies,
+                        ? ListView(
+                            children: [
+                              _ErrorBox(message: _error!, onRetry: _loadBabies),
+                            ],
+                          )
+                        : (_babies.isEmpty)
+                        // ✅ EMPTY STATE
+                        ? ListView(
+                            children: [
+                              const SizedBox(height: 30),
+                              const _EmptyState(),
+                              const SizedBox(height: 18),
+                              _AddBabyCard(
+                                onTap: () => context.go('/baby-create'),
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                          )
+                        // ✅ NORMAL LIST
+                        : ListView.separated(
+                            itemCount: _babies.length + 1,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 16),
+                            itemBuilder: (context, index) {
+                              if (index < _babies.length) {
+                                final b = _babies[index];
+                                return _BabyCard(
+                                  baby: _Baby(
+                                    name: b.name,
+                                    age: b.ageLabel,
+                                    iconPath: _iconFromGender(b.gender),
                                   ),
-                                ],
-                              )
-                            : (_babies.isEmpty)
-                                // ✅ EMPTY STATE
-                                ? ListView(
-                                    children: [
-                                      const SizedBox(height: 30),
-                                      const _EmptyState(),
-                                      const SizedBox(height: 18),
-                                      _AddBabyCard(
-                                        onTap: () => context.go('/baby-create'),
-                                      ),
-                                      const SizedBox(height: 12),
-                                    ],
-                                  )
-                                // ✅ NORMAL LIST
-                                : ListView.separated(
-                                    itemCount: _babies.length + 1,
-                                    separatorBuilder: (_, __) =>
-                                        const SizedBox(height: 16),
-                                    itemBuilder: (context, index) {
-                                      if (index < _babies.length) {
-                                        final b = _babies[index];
-                                        return _BabyCard(
-                                          baby: _Baby(
-                                            name: b.name,
-                                            age: b.ageLabel,
-                                            iconPath: _iconFromGender(b.gender),
-                                          ),
-                                          onTap: () => context.go('/home'),
-                                        );
-                                      }
+                                  onTap: () => context.go(
+                                    '/home?babyName=${Uri.encodeComponent(b.name)}',
+                                  ),
+                                );
+                              }
 
-                                      return _AddBabyCard(
-                                        onTap: () => context.go('/baby-create'),
-                                      );
-                                    },
-                                  ),
+                              return _AddBabyCard(
+                                onTap: () => context.go('/baby-create'),
+                              );
+                            },
+                          ),
                   ),
                 ),
               ],
@@ -189,7 +189,11 @@ class _EmptyState extends StatelessWidget {
               shape: BoxShape.circle,
               color: Color(0xFFEFF6FF),
             ),
-            child: const Icon(Icons.child_care, color: Color(0xFF60A5FA), size: 30),
+            child: const Icon(
+              Icons.child_care,
+              color: Color(0xFF60A5FA),
+              size: 30,
+            ),
           ),
           const SizedBox(width: 14),
           const Expanded(
@@ -219,11 +223,7 @@ class _Baby {
   final String age;
   final String iconPath;
 
-  _Baby({
-    required this.name,
-    required this.age,
-    required this.iconPath,
-  });
+  _Baby({required this.name, required this.age, required this.iconPath});
 }
 
 class _BabyCard extends StatelessWidget {
@@ -250,10 +250,7 @@ class _BabyCard extends StatelessWidget {
                 width: 62,
                 height: 62,
                 child: ClipOval(
-                  child: Image.asset(
-                    baby.iconPath,
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.asset(baby.iconPath, fit: BoxFit.cover),
                 ),
               ),
               const SizedBox(width: 14),
@@ -387,10 +384,7 @@ class _ErrorBox extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          TextButton(
-            onPressed: onRetry,
-            child: const Text('Retry'),
-          ),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );

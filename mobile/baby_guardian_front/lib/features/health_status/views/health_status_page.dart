@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../services/health_status_service.dart';
 import '../model/health_status_result.dart';
 import '../widgets/health_global_status_card.dart';
@@ -75,6 +76,20 @@ class _HealthStatusPageState extends State<HealthStatusPage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          onPressed: () {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Retour...')));
+            if (GoRouter.of(context).canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+          tooltip: 'Back',
+        ),
         title: const Text('Health status'),
         actions: [
           IconButton(
@@ -130,8 +145,10 @@ class _HealthStatusPageState extends State<HealthStatusPage> {
             ),
             const SizedBox(height: 14),
 
-            Text('Detailed AI analysis',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Detailed AI analysis',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 10),
             HealthAiAnalysisCard(
               title: result.analysisTitle,
@@ -140,20 +157,22 @@ class _HealthStatusPageState extends State<HealthStatusPage> {
             ),
 
             const SizedBox(height: 14),
-            Text('Context factors',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Context factors',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 10),
             HealthContextFactorsCard(
-              items: {
-                'Data quality': result.dataQuality,
-              },
+              items: {'Data quality': result.dataQuality},
               monitoringDays: result.monitoringDays,
               aiReliability: result.aiReliability,
             ),
 
             const SizedBox(height: 14),
-            Text('Recommendations',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Recommendations',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 10),
             HealthRecommendationsCard(items: result.recommendations),
           ],
@@ -248,7 +267,9 @@ class _InputsCard extends StatelessWidget {
                 Expanded(
                   child: TextField(
                     controller: weightKg,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Weight (kg)',
                       prefixIcon: Icon(Icons.monitor_weight_outlined),
