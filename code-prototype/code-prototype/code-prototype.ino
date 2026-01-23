@@ -7,8 +7,8 @@
 #include <Adafruit_MLX90614.h>
 
 /* ========= WiFi ========= */
-const char* ssid     = "Oppo";
-const char* wifiPass = "AZiz1234..?";
+const char* ssid     = "HATEM R";
+const char* wifiPass = "74671771";
 
 /* ========= MQTT (HiveMQ public broker) ========= */
 const char* mqttHost = "broker.hivemq.com";

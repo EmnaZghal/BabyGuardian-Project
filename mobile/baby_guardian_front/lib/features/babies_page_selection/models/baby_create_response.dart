@@ -5,7 +5,7 @@ class BabyCreateResponse {
 
   factory BabyCreateResponse.fromJson(Map<String, dynamic> json) {
     return BabyCreateResponse(
-      babyId: (json['babyId'] ?? '').toString(),
+      babyId: json["babyId"]?.toString() ?? "",
     );
   }
 }
