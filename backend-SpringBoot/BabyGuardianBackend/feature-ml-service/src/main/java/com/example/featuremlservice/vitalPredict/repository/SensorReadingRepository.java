@@ -22,11 +22,11 @@ public interface SensorReadingRepository extends JpaRepository<SensorReadingEnti
     """)
     List<SensorReadingEntity> findLastBefore(
             @Param("deviceId") String deviceId,
-            @Param("ts") Instant ts,
+            @Param("ts") LocalDateTime ts,
             Pageable pageable
     );
 
-    default List<SensorReadingEntity> findLast60Before(String deviceId, Instant ts) {
+    default List<SensorReadingEntity> findLast60Before(String deviceId, LocalDateTime ts) {
         return findLastBefore(deviceId, ts, PageRequest.of(0, 60));
     }
 
